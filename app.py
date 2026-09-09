@@ -51,7 +51,7 @@ div[data-testid="stHorizontalBlock"] {
 
 
 # ============================================================
-# SAVED SETTINGS
+# SETTINGS
 # ============================================================
 
 SETTINGS_FILE = "scanner_settings.json"
@@ -64,6 +64,10 @@ DEFAULT_SETTINGS = {
     "min_change": 2.0
 }
 
+
+# ============================================================
+# LOAD SAVED SETTINGS
+# ============================================================
 
 def load_saved_settings():
 
@@ -80,17 +84,21 @@ def load_saved_settings():
             return settings
 
         except Exception:
-
             return DEFAULT_SETTINGS.copy()
 
     return DEFAULT_SETTINGS.copy()
 
+
+# ============================================================
+# SAVE SETTINGS
+# ============================================================
 
 def save_settings(settings):
 
     try:
 
         with open(SETTINGS_FILE, "w") as f:
+
             json.dump(
                 settings,
                 f,
@@ -109,7 +117,7 @@ def save_settings(settings):
 
 
 # ============================================================
-# LOAD SAVED SETTINGS ON STARTUP
+# LOAD SETTINGS ONLY ON STARTUP
 # ============================================================
 
 if "settings_loaded" not in st.session_state:
@@ -144,12 +152,17 @@ if "settings_loaded" not in st.session_state:
 # ============================================================
 
 if "scanner_data" not in st.session_state:
+
     st.session_state.scanner_data = []
 
+
 if "selected_ticker" not in st.session_state:
+
     st.session_state.selected_ticker = "AAPL"
 
+
 if "last_scan_time" not in st.session_state:
+
     st.session_state.last_scan_time = None
 
 
@@ -158,6 +171,7 @@ if "last_scan_time" not in st.session_state:
 # ============================================================
 
 STOCK_UNIVERSE = [
+
     "AAPL",
     "NVDA",
     "TSLA",
@@ -188,6 +202,7 @@ STOCK_UNIVERSE = [
     "BB",
     "OPEN",
     "FFIE"
+
 ]
 
 
@@ -207,6 +222,7 @@ def market_is_open():
     now = get_market_time()
 
     if now.weekday() >= 5:
+
         return False
 
     current_time = now.time()
@@ -229,7 +245,7 @@ def market_is_open():
 
 
 # ============================================================
-# CALCULATE STOCK
+# CALCULATE STOCK DATA
 # ============================================================
 
 def calculate_stock(symbol):
@@ -237,7 +253,7 @@ def calculate_stock(symbol):
     try:
 
         # ----------------------------------------------------
-        # Intraday data
+        # 5 MINUTE DATA
         # ----------------------------------------------------
 
         intraday = yf.Ticker(
@@ -250,6 +266,7 @@ def calculate_stock(symbol):
         )
 
         if intraday.empty:
+
             return None
 
         intraday = intraday.dropna(
@@ -260,10 +277,11 @@ def calculate_stock(symbol):
         )
 
         if intraday.empty:
+
             return None
 
         # ----------------------------------------------------
-        # Latest trading session
+        # LATEST SESSION
         # ----------------------------------------------------
 
         latest_date = (
@@ -276,6 +294,7 @@ def calculate_stock(symbol):
         ].copy()
 
         if session_data.empty:
+
             return None
 
         # ----------------------------------------------------
@@ -289,7 +308,7 @@ def calculate_stock(symbol):
         )
 
         # ----------------------------------------------------
-        # Full session volume
+        # FULL SESSION VOLUME
         # ----------------------------------------------------
 
         session_volume = float(
@@ -299,7 +318,7 @@ def calculate_stock(symbol):
         )
 
         # ----------------------------------------------------
-        # Daily data
+        # DAILY DATA
         # ----------------------------------------------------
 
         daily = yf.Ticker(
@@ -312,6 +331,7 @@ def calculate_stock(symbol):
         )
 
         if daily.empty:
+
             return None
 
         daily = daily.dropna(
@@ -322,10 +342,11 @@ def calculate_stock(symbol):
         )
 
         if len(daily) < 6:
+
             return None
 
         # ----------------------------------------------------
-        # Previous day's close
+        # PREVIOUS CLOSE
         # ----------------------------------------------------
 
         previous_close = float(
@@ -335,21 +356,22 @@ def calculate_stock(symbol):
         )
 
         # ----------------------------------------------------
-        # Percentage change
+        # PERCENT CHANGE
         # ----------------------------------------------------
 
         percent_change = (
+
             (
                 ltp
                 - previous_close
             )
             / previous_close
             * 100
+
         )
 
         # ----------------------------------------------------
-        # Average daily volume
-        # Exclude current day
+        # PREVIOUS 5 DAYS AVERAGE VOLUME
         # ----------------------------------------------------
 
         previous_volumes = daily[
@@ -361,7 +383,7 @@ def calculate_stock(symbol):
         )
 
         # ----------------------------------------------------
-        # Relative volume
+        # RELATIVE VOLUME
         # ----------------------------------------------------
 
         if average_daily_volume > 0:
@@ -376,7 +398,7 @@ def calculate_stock(symbol):
             relative_volume = 0
 
         # ----------------------------------------------------
-        # Latest time
+        # TIME
         # ----------------------------------------------------
 
         latest_timestamp = (
@@ -392,6 +414,7 @@ def calculate_stock(symbol):
             )
 
         except Exception:
+
             pass
 
         time_string = (
@@ -401,7 +424,7 @@ def calculate_stock(symbol):
         )
 
         # ----------------------------------------------------
-        # Return data
+        # RETURN
         # ----------------------------------------------------
 
         return {
@@ -417,6 +440,7 @@ def calculate_stock(symbol):
             "Rel Vol": relative_volume,
 
             "Volume": session_volume
+
         }
 
     except Exception as e:
@@ -467,6 +491,7 @@ def run_scanner():
         )
 
     progress.empty()
+
     status.empty()
 
     return results
@@ -519,70 +544,84 @@ with st.sidebar:
     )
 
     # --------------------------------------------------------
-    # PRICE
+    # MIN PRICE
     # --------------------------------------------------------
 
-    st.session_state.min_price = st.number_input(
-        "Minimum Price",
-        min_value=0.0,
-        value=float(
-            st.session_state.min_price
-        ),
-        step=0.50
-    )
-
-    st.session_state.max_price = st.number_input(
-        "Maximum Price",
-        min_value=0.0,
-        value=float(
-            st.session_state.max_price
-        ),
-        step=0.50
+    st.session_state.min_price = (
+        st.number_input(
+            "Minimum Price",
+            min_value=0.0,
+            value=float(
+                st.session_state.min_price
+            ),
+            step=0.50
+        )
     )
 
     # --------------------------------------------------------
-    # VOLUME
+    # MAX PRICE
     # --------------------------------------------------------
 
-    st.session_state.min_volume = st.number_input(
-        "Minimum Volume",
-        min_value=0,
-        value=int(
-            st.session_state.min_volume
-        ),
-        step=10000
+    st.session_state.max_price = (
+        st.number_input(
+            "Maximum Price",
+            min_value=0.0,
+            value=float(
+                st.session_state.max_price
+            ),
+            step=0.50
+        )
     )
 
     # --------------------------------------------------------
-    # RELATIVE VOLUME
+    # MINIMUM VOLUME
     # --------------------------------------------------------
 
-    st.session_state.min_rvol = st.number_input(
-        "Minimum Rel Vol",
-        min_value=0.0,
-        value=float(
-            st.session_state.min_rvol
-        ),
-        step=0.5
+    st.session_state.min_volume = (
+        st.number_input(
+            "Minimum Volume",
+            min_value=0,
+            value=int(
+                st.session_state.min_volume
+            ),
+            step=10000
+        )
     )
 
     # --------------------------------------------------------
-    # PERCENT CHANGE
+    # MINIMUM RELATIVE VOLUME
     # --------------------------------------------------------
 
-    st.session_state.min_change = st.number_input(
-        "Minimum % Change",
-        min_value=-100.0,
-        value=float(
-            st.session_state.min_change
-        ),
-        step=0.5
+    st.session_state.min_rvol = (
+        st.number_input(
+            "Minimum Rel Vol",
+            min_value=0.0,
+            value=float(
+                st.session_state.min_rvol
+            ),
+            step=0.5
+        )
+    )
+
+    # --------------------------------------------------------
+    # MINIMUM CHANGE
+    # --------------------------------------------------------
+
+    st.session_state.min_change = (
+        st.number_input(
+            "Minimum % Change",
+            min_value=-100.0,
+            value=float(
+                st.session_state.min_change
+            ),
+            step=0.5
+        )
     )
 
     st.markdown("---")
 
     # ========================================================
-    # SAVE SETTINGS
+    # SAVE FILTER SETTINGS
     # ========================================================
 
     if st.button(
@@ -606,6 +645,7 @@ with st.sidebar:
 
             "min_change":
                 st.session_state.min_change
+
         }
 
         if save_settings(
@@ -624,6 +664,9 @@ with st.sidebar:
         "↩ Reset to Default",
         use_container_width=True
     ):
+
+        # Change current filters only.
+        # DO NOT save them.
 
         st.session_state.min_price = (
             DEFAULT_SETTINGS["min_price"]
@@ -645,16 +688,12 @@ with st.sidebar:
             DEFAULT_SETTINGS["min_change"]
         )
 
-        # IMPORTANT:
-        # Do NOT save here.
-        # This only changes the current filters.
-
         st.rerun()
 
     st.markdown("---")
 
     # ========================================================
-    # SCAN BUTTON
+    # SCAN
     # ========================================================
 
     scan_button = st.button(
@@ -665,7 +704,7 @@ with st.sidebar:
 
 
 # ============================================================
-# SCAN
+# RUN SCAN
 # ============================================================
 
 if scan_button:
@@ -686,7 +725,7 @@ if scan_button:
 
 
 # ============================================================
-# LAST SCAN
+# LAST SCAN TIME
 # ============================================================
 
 if st.session_state.last_scan_time:
@@ -710,7 +749,7 @@ scanner_col, chart_col = st.columns(
 
 
 # ============================================================
-# LEFT SIDE — SCANNER
+# SCANNER — LEFT 35%
 # ============================================================
 
 with scanner_col:
@@ -765,7 +804,7 @@ with scanner_col:
                 )
 
         # ----------------------------------------------------
-        # SORT BY RELATIVE VOLUME
+        # SORT
         # ----------------------------------------------------
 
         filtered = sorted(
@@ -775,7 +814,7 @@ with scanner_col:
         )
 
         # ----------------------------------------------------
-        # HEADER
+        # TABLE HEADER
         # ----------------------------------------------------
 
         h1, h2, h3, h4, h5 = st.columns(
@@ -835,8 +874,8 @@ with scanner_col:
             if c2.button(
                 row["Symbol"],
                 key=(
-                    f"ticker_"
-                    f"{row['Symbol']}"
+                    "ticker_"
+                    + row["Symbol"]
                 ),
                 use_container_width=True
             ):
@@ -855,13 +894,13 @@ with scanner_col:
                 f"{row['% Change']:.2f}%"
             )
 
-            # Number only — no X
+            # Rel Vol number only
             c5.write(
                 f"{row['Rel Vol']:.1f}"
             )
 
         # ----------------------------------------------------
-        # NUMBER OF RESULTS
+        # RESULTS
         # ----------------------------------------------------
 
         st.caption(
@@ -876,7 +915,7 @@ with scanner_col:
 
 
 # ============================================================
-# RIGHT SIDE — TRADINGVIEW
+# TRADINGVIEW — RIGHT 65%
 # ============================================================
 
 with chart_col:
@@ -893,7 +932,7 @@ with chart_col:
     )
 
     # --------------------------------------------------------
-    # EXCHANGE
+    # EXCHANGE MAPPING
     # --------------------------------------------------------
 
     nyse_symbols = {
@@ -916,20 +955,23 @@ with chart_col:
         )
 
     # --------------------------------------------------------
-    # CHART HEIGHT
+    # LARGE CHART
     # --------------------------------------------------------
 
-    chart_height = 650
+    chart_height = 850
 
     # --------------------------------------------------------
-    # TRADINGVIEW ADVANCED CHART
+    # TRADINGVIEW HTML
     # --------------------------------------------------------
 
     tradingview_html = f"""
 
     <div
         class="tradingview-widget-container"
-        style="height:100%;width:100%;"
+        style="
+            height:100%;
+            width:100%;
+        "
     >
 
         <div
@@ -996,7 +1038,7 @@ with chart_col:
 
             "popup_width": "1000",
 
-            "popup_height": "650",
+            "popup_height": "850",
 
             "calendar": false,
 
