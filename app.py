@@ -19,7 +19,7 @@ st.set_page_config(
 
 
 # ============================================================
-# COMPACT / SCREEN-FIT CSS
+# SCREEN / LAYOUT CSS
 # ============================================================
 
 st.markdown(
@@ -27,41 +27,38 @@ st.markdown(
     <style>
 
     .block-container {
-        padding-top: 0.5rem;
-        padding-bottom: 0.5rem;
-        padding-left: 0.7rem;
-        padding-right: 0.7rem;
+        padding-top: 0.4rem;
+        padding-bottom: 0.4rem;
+        padding-left: 0.6rem;
+        padding-right: 0.6rem;
         max-width: 100%;
     }
 
     h1 {
-        font-size: 1.55rem !important;
-        margin-bottom: 0.2rem !important;
+        font-size: 1.45rem !important;
+        margin-top: 0rem !important;
+        margin-bottom: 0.15rem !important;
     }
 
-    h2 {
-        font-size: 1.15rem !important;
-        margin-bottom: 0.2rem !important;
-    }
-
-    h3 {
-        font-size: 1rem !important;
+    h2, h3 {
+        margin-top: 0.15rem !important;
+        margin-bottom: 0.15rem !important;
     }
 
     div[data-testid="stHorizontalBlock"] {
-        gap: 0.45rem;
+        gap: 0.4rem;
     }
 
     div[data-testid="stButton"] button {
         width: 100%;
-        min-height: 28px;
-        height: 28px;
-        padding: 0px 4px;
-        font-size: 0.82rem;
+        min-height: 27px;
+        height: 27px;
+        padding: 0px 3px;
+        font-size: 0.78rem;
     }
 
     div[data-testid="stMarkdownContainer"] p {
-        margin-bottom: 0.15rem;
+        margin-bottom: 0.1rem;
     }
 
     </style>
@@ -81,27 +78,37 @@ st.title("US Stock Momentum Scanner")
 # MARKET STATUS
 # ============================================================
 
-ny_time = datetime.now(ZoneInfo("America/New_York"))
+ny_time = datetime.now(
+    ZoneInfo("America/New_York")
+)
 
 market_open = (
     ny_time.weekday() < 5
     and (
-        (ny_time.hour > 9)
-        or (ny_time.hour == 9 and ny_time.minute >= 30)
+        ny_time.hour > 9
+        or (
+            ny_time.hour == 9
+            and ny_time.minute >= 30
+        )
     )
     and (
-        (ny_time.hour < 16)
-        or (ny_time.hour == 16 and ny_time.minute == 0)
+        ny_time.hour < 16
+        or (
+            ny_time.hour == 16
+            and ny_time.minute == 0
+        )
     )
 )
 
 if market_open:
     st.success(
-        f"Market OPEN  |  New York: {ny_time.strftime('%I:%M:%S %p')}"
+        f"Market OPEN  |  New York: "
+        f"{ny_time.strftime('%I:%M:%S %p')}"
     )
 else:
     st.info(
-        f"Market CLOSED  |  New York: {ny_time.strftime('%I:%M:%S %p')}"
+        f"Market CLOSED  |  New York: "
+        f"{ny_time.strftime('%I:%M:%S %p')}"
     )
 
 
@@ -202,7 +209,7 @@ if "selected_ticker" not in st.session_state:
 
 
 # ============================================================
-# CALCULATE STOCK
+# STOCK CALCULATION
 # ============================================================
 
 def calculate_stock(symbol):
@@ -211,7 +218,10 @@ def calculate_stock(symbol):
 
         ticker = yf.Ticker(symbol)
 
-        # Intraday data
+        # ----------------------------------------------------
+        # 5 MINUTE DATA
+        # ----------------------------------------------------
+
         intraday = ticker.history(
             period="5d",
             interval="5m",
@@ -222,7 +232,10 @@ def calculate_stock(symbol):
         if intraday.empty:
             return None
 
-        # Daily data for previous close / average volume
+        # ----------------------------------------------------
+        # DAILY DATA
+        # ----------------------------------------------------
+
         daily = ticker.history(
             period="20d",
             interval="1d",
@@ -232,9 +245,9 @@ def calculate_stock(symbol):
         if daily.empty:
             return None
 
-        # Remove timezone issue
         intraday = intraday.copy()
 
+        # Latest trading date
         latest_date = intraday.index[-1].date()
 
         today_data = intraday[
@@ -244,42 +257,98 @@ def calculate_stock(symbol):
         if today_data.empty:
             return None
 
-        # Current price
-        ltp = float(today_data["Close"].iloc[-1])
+        # ----------------------------------------------------
+        # LTP
+        # ----------------------------------------------------
 
-        # Current session volume
+        ltp = float(
+            today_data["Close"].iloc[-1]
+        )
+
+        # ----------------------------------------------------
+        # CURRENT SESSION VOLUME
+        # ----------------------------------------------------
+
         session_volume = float(
             today_data["Volume"].sum()
         )
 
-        # Previous trading day's close
-        previous_close = float(
-            daily["Close"].iloc[-2]
-            if len(daily) >= 2
-            else daily["Close"].iloc[-1]
-        )
+        # ----------------------------------------------------
+        # PREVIOUS DAY CLOSE
+        # ----------------------------------------------------
 
-        # Percentage change
-        change_pct = (
-            (ltp - previous_close)
-            / previous_close
-            * 100
-        )
+        if len(daily) >= 2:
 
-        # Average previous daily volume
-        if len(daily) >= 6:
-            previous_volumes = daily["Volume"].iloc[-6:-1]
+            previous_close = float(
+                daily["Close"].iloc[-2]
+            )
+
         else:
-            previous_volumes = daily["Volume"].iloc[:-1]
 
-        avg_volume = float(
-            previous_volumes.mean()
-        ) if not previous_volumes.empty else 0
+            previous_close = float(
+                daily["Close"].iloc[-1]
+            )
+
+        # ----------------------------------------------------
+        # % CHANGE
+        # ----------------------------------------------------
+
+        if previous_close > 0:
+
+            change_pct = (
+                (ltp - previous_close)
+                / previous_close
+                * 100
+            )
+
+        else:
+
+            change_pct = 0
+
+        # ----------------------------------------------------
+        # AVERAGE DAILY VOLUME
+        # ----------------------------------------------------
+
+        if len(daily) >= 6:
+
+            previous_volumes = (
+                daily["Volume"].iloc[-6:-1]
+            )
+
+        else:
+
+            previous_volumes = (
+                daily["Volume"].iloc[:-1]
+            )
+
+        if not previous_volumes.empty:
+
+            avg_volume = float(
+                previous_volumes.mean()
+            )
+
+        else:
+
+            avg_volume = 0
+
+        # ----------------------------------------------------
+        # RELATIVE VOLUME
+        # ----------------------------------------------------
 
         if avg_volume > 0:
-            rvol = session_volume / avg_volume
+
+            rvol = (
+                session_volume
+                / avg_volume
+            )
+
         else:
+
             rvol = 0
+
+        # ----------------------------------------------------
+        # TIME
+        # ----------------------------------------------------
 
         current_time = datetime.now(
             ZoneInfo("America/New_York")
@@ -295,6 +364,7 @@ def calculate_stock(symbol):
         }
 
     except Exception:
+
         return None
 
 
@@ -310,7 +380,9 @@ def run_scanner():
 
     total = len(STOCK_UNIVERSE)
 
-    for i, symbol in enumerate(STOCK_UNIVERSE):
+    for i, symbol in enumerate(
+        STOCK_UNIVERSE
+    ):
 
         result = calculate_stock(symbol)
 
@@ -318,30 +390,40 @@ def run_scanner():
             results.append(result)
 
         progress.progress(
-            int((i + 1) / total * 100)
+            int(
+                ((i + 1) / total) * 100
+            )
         )
 
     progress.empty()
 
     if results:
+
         return pd.DataFrame(results)
 
     return pd.DataFrame()
 
 
 # ============================================================
-# SCAN
+# INITIAL SCAN
 # ============================================================
 
-if scan_button or st.session_state.scanner_data.empty:
+if (
+    scan_button
+    or st.session_state.scanner_data.empty
+):
 
-    with st.spinner("Scanning US stocks..."):
+    with st.spinner(
+        "Scanning US stocks..."
+    ):
 
-        st.session_state.scanner_data = run_scanner()
+        st.session_state.scanner_data = (
+            run_scanner()
+        )
 
 
 # ============================================================
-# MAIN LAYOUT
+# MAIN TWO-COLUMN LAYOUT
 # ============================================================
 
 scanner_col, chart_col = st.columns(
@@ -351,7 +433,7 @@ scanner_col, chart_col = st.columns(
 
 
 # ============================================================
-# LEFT - SCANNER
+# LEFT SIDE - SCANNER
 # ============================================================
 
 with scanner_col:
@@ -362,7 +444,10 @@ with scanner_col:
 
     if not df.empty:
 
-        # Apply filters
+        # ----------------------------------------------------
+        # FILTERS
+        # ----------------------------------------------------
+
         filtered = df[
             (df["LTP"] >= min_price)
             & (df["LTP"] <= max_price)
@@ -371,7 +456,10 @@ with scanner_col:
             & (df["% Change"] >= min_change)
         ].copy()
 
-        # Sort by Rel Vol
+        # ----------------------------------------------------
+        # SORT BY RELATIVE VOLUME
+        # ----------------------------------------------------
+
         filtered = filtered.sort_values(
             "Rel Vol",
             ascending=False
@@ -381,7 +469,10 @@ with scanner_col:
             f"{len(filtered)} stocks matched"
         )
 
-        # Header
+        # ----------------------------------------------------
+        # TABLE HEADER
+        # ----------------------------------------------------
+
         h1, h2, h3, h4, h5 = st.columns(
             [1.1, 1.3, 1.15, 1.25, 1.1]
         )
@@ -394,9 +485,12 @@ with scanner_col:
 
         st.divider()
 
-        # Scrollable scanner area
+        # ----------------------------------------------------
+        # SCROLLABLE SCANNER
+        # ----------------------------------------------------
+
         with st.container(
-            height=500,
+            height=610,
             border=False
         ):
 
@@ -406,9 +500,12 @@ with scanner_col:
                     [1.1, 1.3, 1.15, 1.25, 1.1]
                 )
 
-                c1.write(row["Time"])
+                # TIME
+                c1.write(
+                    row["Time"]
+                )
 
-                # TICKER BUTTON
+                # SYMBOL BUTTON
                 if c2.button(
                     row["Symbol"],
                     key=f"stock_{row['Symbol']}",
@@ -421,15 +518,18 @@ with scanner_col:
 
                     st.rerun()
 
+                # LTP
                 c3.write(
                     f"${row['LTP']:.2f}"
                 )
 
+                # PERCENT CHANGE
                 c4.write(
                     f"{row['% Change']:.2f}%"
                 )
 
-                # ONLY NUMBER - NO X
+                # RELATIVE VOLUME
+                # NUMBER ONLY
                 c5.write(
                     f"{row['Rel Vol']:.2f}"
                 )
@@ -442,7 +542,7 @@ with scanner_col:
 
 
 # ============================================================
-# RIGHT - TRADINGVIEW
+# RIGHT SIDE - TRADINGVIEW
 # ============================================================
 
 with chart_col:
@@ -455,17 +555,20 @@ with chart_col:
         f"TradingView — {selected_ticker}"
     )
 
-    # Escape ticker safely
     safe_symbol = html.escape(
         selected_ticker
     )
+
+    # --------------------------------------------------------
+    # TRADINGVIEW ADVANCED CHART
+    # --------------------------------------------------------
 
     tradingview_html = f"""
     <div
         class="tradingview-widget-container"
         style="
             width:100%;
-            height:510px;
+            height:650px;
             overflow:hidden;
         "
     >
@@ -474,7 +577,7 @@ with chart_col:
             class="tradingview-widget-container__widget"
             style="
                 width:100%;
-                height:510px;
+                height:650px;
             "
         ></div>
 
@@ -509,6 +612,6 @@ with chart_col:
 
     components.html(
         tradingview_html,
-        height=520,
+        height=660,
         scrolling=False
     )
