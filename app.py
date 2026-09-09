@@ -2,14 +2,8 @@ import streamlit as st
 import pandas as pd
 import yfinance as yf
 import streamlit.components.v1 as components
-import time
 from datetime import datetime
 from zoneinfo import ZoneInfo
-
-
-# ============================================================
-# PAGE SETUP
-# ============================================================
 
 st.set_page_config(
     page_title="US Stock Momentum Scanner",
@@ -89,12 +83,6 @@ min_change = st.sidebar.number_input(
     step=1.0
 )
 
-refresh_seconds = st.sidebar.selectbox(
-    "Refresh",
-    [30, 60, 120, 300],
-    index=1
-)
-
 scan_button = st.sidebar.button(
     "🔍 Scan Now",
     use_container_width=True
@@ -102,7 +90,7 @@ scan_button = st.sidebar.button(
 
 
 # ============================================================
-# STOCK LIST
+# STOCK UNIVERSE
 # ============================================================
 
 @st.cache_data(ttl=300)
@@ -164,13 +152,31 @@ def calculate_stock(ticker):
         if len(data) < 20:
             return None
 
+        # Latest price
         latest = data.iloc[-1]
 
         price = float(latest["Close"])
 
-        volume = float(latest["Volume"])
+        # ----------------------------------------------------
+        # PREVIOUS DAILY CLOSE
+        # ----------------------------------------------------
 
-        previous_close = float(data["Close"].iloc[-1])
+        daily_data = yf.Ticker(ticker).history(
+            period="5d",
+            interval="1d"
+        )
+
+        if daily_data.empty:
+            return None
+
+        daily_data = daily_data.dropna()
+
+        if len(daily_data) < 2:
+            return None
+
+        previous_close = float(
+            daily_data["Close"].iloc[-2]
+        )
 
         if previous_close == 0:
             return None
@@ -181,26 +187,98 @@ def calculate_stock(ticker):
             * 100
         )
 
-        # Simple RVOL calculation
-        average_volume = data["Volume"].rolling(
-            20
-        ).mean().iloc[-1]
+        # ----------------------------------------------------
+        # CURRENT SESSION VOLUME
+        # ----------------------------------------------------
 
-        if average_volume and average_volume > 0:
-            rvol = volume / average_volume
+        now = datetime.now(
+            ZoneInfo("America/New_York")
+        )
+
+        today_date = now.date()
+
+        session_data = data[
+            data.index.date == today_date
+        ]
+
+        if session_data.empty:
+
+            # If today's data isn't available,
+            # use latest available session.
+            latest_date = data.index[-1].date()
+
+            session_data = data[
+                data.index.date == latest_date
+            ]
+
+        session_volume = float(
+            session_data["Volume"].sum()
+        )
+
+        # ----------------------------------------------------
+        # RELATIVE VOLUME
+        # ----------------------------------------------------
+        #
+        # Compare the current session volume with
+        # average volume of previous sessions.
+        #
+
+        data_copy = data.copy()
+
+        data_copy["Date"] = data_copy.index.date
+
+        daily_volume = (
+            data_copy
+            .groupby("Date")["Volume"]
+            .sum()
+        )
+
+        if len(daily_volume) >= 2:
+
+            previous_volumes = daily_volume.iloc[:-1]
+
+            average_daily_volume = (
+                previous_volumes.mean()
+            )
+
+            if average_daily_volume > 0:
+
+                rvol = (
+                    session_volume
+                    / average_daily_volume
+                )
+
+            else:
+                rvol = 0
+
         else:
             rvol = 0
 
         return {
-            "Ticker": ticker,
-            "Price": round(price, 2),
-            "Change %": round(change_percent, 2),
-            "Volume": int(volume),
-            "RVOL": round(rvol, 2),
-            "Time": data.index[-1].strftime("%H:%M")
+
+            "Time": data.index[-1].strftime("%H:%M"),
+
+            "Symbol": ticker,
+
+            "LTP": round(price, 2),
+
+            "% Change": round(
+                change_percent,
+                2
+            ),
+
+            "Rel Vol": round(
+                rvol,
+                2
+            ),
+
+            "Volume": int(
+                session_volume
+            )
         }
 
     except Exception:
+
         return None
 
 
@@ -223,6 +301,7 @@ def run_scanner():
         result = calculate_stock(ticker)
 
         if result is not None:
+
             results.append(result)
 
         progress.progress(
@@ -232,35 +311,52 @@ def run_scanner():
     progress.empty()
 
     if results:
+
         return pd.DataFrame(results)
 
     return pd.DataFrame(
         columns=[
-            "Ticker",
-            "Price",
-            "Change %",
-            "Volume",
-            "RVOL",
-            "Time"
+            "Time",
+            "Symbol",
+            "LTP",
+            "% Change",
+            "Rel Vol",
+            "Volume"
         ]
     )
 
 
 # ============================================================
-# RUN SCANNER
+# SESSION STATE
 # ============================================================
 
 if "scanner_data" not in st.session_state:
 
-    st.session_state.scanner_data = pd.DataFrame()
+    st.session_state.scanner_data = (
+        pd.DataFrame()
+    )
 
 
-if scan_button or st.session_state.scanner_data.empty:
+if "selected_ticker" not in st.session_state:
 
-    st.session_state.scanner_data = run_scanner()
+    st.session_state.selected_ticker = None
 
 
-df = st.session_state.scanner_data
+# ============================================================
+# INITIAL SCAN
+# ============================================================
+
+if (
+    scan_button
+    or st.session_state.scanner_data.empty
+):
+
+    st.session_state.scanner_data = (
+        run_scanner()
+    )
+
+
+df = st.session_state.scanner_data.copy()
 
 
 # ============================================================
@@ -272,30 +368,35 @@ filtered = df.copy()
 if not filtered.empty:
 
     filtered = filtered[
-        (filtered["Price"] >= min_price) &
-        (filtered["Price"] <= max_price) &
-        (filtered["Volume"] >= min_volume) &
-        (filtered["RVOL"] >= min_rvol) &
-        (filtered["Change %"] >= min_change)
+        (filtered["LTP"] >= min_price)
+        &
+        (filtered["LTP"] <= max_price)
+        &
+        (filtered["Volume"] >= min_volume)
+        &
+        (filtered["Rel Vol"] >= min_rvol)
+        &
+        (filtered["% Change"] >= min_change)
     ]
 
     filtered = filtered.sort_values(
-        "RVOL",
+        "Rel Vol",
         ascending=False
     )
 
 
 # ============================================================
-# SCANNER + TRADINGVIEW
+# TWO COLUMN LAYOUT
 # ============================================================
 
 scanner_col, chart_col = st.columns(
-    [40, 60]
+    [45, 55],
+    gap="medium"
 )
 
 
 # ============================================================
-# LEFT - SCANNER
+# LEFT — SCANNER
 # ============================================================
 
 with scanner_col:
@@ -314,32 +415,121 @@ with scanner_col:
 
     else:
 
-        st.dataframe(
-            filtered,
+        # Only display requested columns
+        display_df = filtered[
+            [
+                "Time",
+                "Symbol",
+                "LTP",
+                "% Change",
+                "Rel Vol"
+            ]
+        ].copy()
+
+        # ----------------------------------------------------
+        # CLICKABLE SCANNER
+        # ----------------------------------------------------
+
+        event = st.dataframe(
+
+            display_df,
+
             use_container_width=True,
-            hide_index=True
+
+            hide_index=True,
+
+            height=700,
+
+            selection_mode="single-row",
+
+            on_select="rerun",
+
+            column_config={
+
+                "Time": st.column_config.TextColumn(
+                    "Time",
+                    width="small"
+                ),
+
+                "Symbol": st.column_config.TextColumn(
+                    "Symbol",
+                    width="small"
+                ),
+
+                "LTP": st.column_config.NumberColumn(
+                    "LTP",
+                    format="%.2f"
+                ),
+
+                "% Change": st.column_config.NumberColumn(
+                    "% Change",
+                    format="%.2f"
+                ),
+
+                "Rel Vol": st.column_config.NumberColumn(
+                    "Rel Vol",
+                    format="%.2f"
+                )
+            }
         )
 
-        selected_ticker = st.selectbox(
-            "Select stock",
-            filtered["Ticker"].tolist()
-        )
+        # ----------------------------------------------------
+        # GET SELECTED ROW
+        # ----------------------------------------------------
+
+        if event.selection.rows:
+
+            selected_row = (
+                event.selection.rows[0]
+            )
+
+            selected_symbol = (
+                display_df.iloc[
+                    selected_row
+                ]["Symbol"]
+            )
+
+            st.session_state.selected_ticker = (
+                selected_symbol
+            )
 
 
 # ============================================================
-# RIGHT - TRADINGVIEW
+# DEFAULT STOCK
+# ============================================================
+
+if (
+    st.session_state.selected_ticker is None
+    and not filtered.empty
+):
+
+    st.session_state.selected_ticker = (
+        filtered.iloc[0]["Symbol"]
+    )
+
+
+# ============================================================
+# RIGHT — TRADINGVIEW
 # ============================================================
 
 with chart_col:
 
     st.subheader("📈 TradingView Chart")
 
-    if not filtered.empty:
+    if st.session_state.selected_ticker:
+
+        selected_ticker = (
+            st.session_state.selected_ticker
+        )
 
         tradingview_html = f"""
+
         <div
             id="tradingview_chart"
-            style="width:100%; height:700px;">
+            style="
+                width:100%;
+                height:700px;
+            ">
         </div>
 
         <script
@@ -350,19 +540,36 @@ with chart_col:
         <script type="text/javascript">
 
         new TradingView.widget({{
+
             "width": "100%",
+
             "height": 700,
-            "symbol": "NASDAQ:{selected_ticker}",
+
+            "symbol":
+                "NASDAQ:{selected_ticker}",
+
             "interval": "5",
-            "timezone": "America/New_York",
+
+            "timezone":
+                "America/New_York",
+
             "theme": "dark",
+
             "style": "1",
+
             "locale": "en",
+
             "enable_publishing": false,
+
             "hide_top_toolbar": false,
+
             "hide_legend": false,
+
             "save_image": false,
-            "container_id": "tradingview_chart"
+
+            "container_id":
+                "tradingview_chart"
+
         }});
 
         </script>
@@ -376,12 +583,12 @@ with chart_col:
     else:
 
         st.info(
-            "Select a stock from the scanner to display the chart."
+            "Select a stock from the scanner."
         )
 
 
 # ============================================================
-# MANUAL REFRESH
+# BOTTOM REFRESH
 # ============================================================
 
 st.sidebar.markdown("---")
@@ -391,6 +598,8 @@ if st.sidebar.button(
     use_container_width=True
 ):
 
-    st.session_state.scanner_data = run_scanner()
+    st.session_state.scanner_data = (
+        run_scanner()
+    )
 
     st.rerun()
