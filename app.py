@@ -17,22 +17,22 @@ st.set_page_config(
 
 
 # =========================================================
-# COMPACT SCREEN LAYOUT
+# COMPACT SCREEN CSS
 # =========================================================
 st.markdown(
     """
     <style>
 
-    /* Remove unnecessary page space */
+    /* Reduce page margins */
     .block-container {
         padding-top: 0.05rem !important;
         padding-bottom: 0rem !important;
-        padding-left: 0.35rem !important;
-        padding-right: 0.35rem !important;
+        padding-left: 0.3rem !important;
+        padding-right: 0.3rem !important;
         max-width: 100% !important;
     }
 
-    /* Compact headings */
+    /* Compact title */
     h1 {
         font-size: 1.15rem !important;
         margin: 0rem !important;
@@ -60,7 +60,7 @@ st.markdown(
         gap: 0.2rem !important;
     }
 
-    /* Compact buttons */
+    /* Scanner buttons */
     div[data-testid="stButton"] button {
         width: 100%;
         min-height: 23px !important;
@@ -70,22 +70,17 @@ st.markdown(
         line-height: 1 !important;
     }
 
-    /* Compact text */
+    /* Text spacing */
     div[data-testid="stMarkdownContainer"] p {
         margin: 0rem !important;
         padding: 0rem !important;
         font-size: 0.75rem !important;
     }
 
-    /* Compact alerts */
+    /* Alert spacing */
     div[data-testid="stAlert"] {
         padding: 0.15rem 0.4rem !important;
         margin: 0rem !important;
-    }
-
-    /* Reduce dataframe/container spacing */
-    div[data-testid="stVerticalBlockBorderWrapper"] {
-        padding: 0rem !important;
     }
 
     </style>
@@ -97,20 +92,24 @@ st.markdown(
 # =========================================================
 # DASHBOARD HEIGHT
 # =========================================================
-# Reduced so the whole dashboard fits on a normal laptop
 DASHBOARD_HEIGHT = 500
 
 
 # =========================================================
 # MARKET STATUS
 # =========================================================
-ny_time = datetime.now(ZoneInfo("America/New_York"))
+ny_time = datetime.now(
+    ZoneInfo("America/New_York")
+)
 
 market_open = (
     ny_time.weekday() < 5
     and (
         ny_time.hour > 9
-        or (ny_time.hour == 9 and ny_time.minute >= 30)
+        or (
+            ny_time.hour == 9
+            and ny_time.minute >= 30
+        )
     )
     and ny_time.hour < 16
 )
@@ -127,13 +126,23 @@ else:
 header_col1, header_col2 = st.columns([4, 1])
 
 with header_col1:
+
     st.markdown(
         "### 🚀 US Stock Momentum Scanner"
     )
 
 with header_col2:
+
     st.markdown(
-        f"<div style='text-align:right;font-size:0.8rem;padding-top:5px;'>{market_status}</div>",
+        f"""
+        <div style="
+            text-align:right;
+            font-size:0.78rem;
+            padding-top:5px;
+        ">
+            {market_status}
+        </div>
+        """,
         unsafe_allow_html=True
     )
 
@@ -230,7 +239,9 @@ def calculate_stock(symbol):
 
         ticker = yf.Ticker(symbol)
 
-        # Intraday data
+        # -------------------------------------------------
+        # Intraday 5-minute data
+        # -------------------------------------------------
         intraday = ticker.history(
             period="5d",
             interval="5m",
@@ -238,7 +249,9 @@ def calculate_stock(symbol):
             auto_adjust=False
         )
 
+        # -------------------------------------------------
         # Daily data
+        # -------------------------------------------------
         daily = ticker.history(
             period="20d",
             interval="1d",
@@ -248,17 +261,30 @@ def calculate_stock(symbol):
         if intraday.empty or daily.empty:
             return None
 
-        intraday = intraday.dropna(subset=["Close", "Volume"])
-        daily = daily.dropna(subset=["Close", "Volume"])
+        intraday = intraday.dropna(
+            subset=["Close", "Volume"]
+        )
+
+        daily = daily.dropna(
+            subset=["Close", "Volume"]
+        )
 
         if len(daily) < 6:
             return None
 
-        # Latest price
-        ltp = float(intraday["Close"].iloc[-1])
+        # -------------------------------------------------
+        # Latest traded price
+        # -------------------------------------------------
+        ltp = float(
+            intraday["Close"].iloc[-1]
+        )
 
+        # -------------------------------------------------
         # Latest trading session
-        latest_date = intraday.index[-1].date()
+        # -------------------------------------------------
+        latest_date = (
+            intraday.index[-1].date()
+        )
 
         session_data = intraday[
             intraday.index.date == latest_date
@@ -267,24 +293,34 @@ def calculate_stock(symbol):
         if session_data.empty:
             return None
 
-        # Total session volume
+        # -------------------------------------------------
+        # Total volume for current session
+        # -------------------------------------------------
         session_volume = float(
             session_data["Volume"].sum()
         )
 
-        # Previous close
+        # -------------------------------------------------
+        # Previous day's close
+        # -------------------------------------------------
         previous_close = float(
             daily["Close"].iloc[-2]
         )
 
+        # -------------------------------------------------
         # Percentage change
+        # -------------------------------------------------
         change_pct = (
             (ltp - previous_close)
             / previous_close
         ) * 100
 
-        # Average previous 5 daily volumes
-        previous_volumes = daily["Volume"].iloc[-6:-1]
+        # -------------------------------------------------
+        # Average volume of previous 5 sessions
+        # -------------------------------------------------
+        previous_volumes = (
+            daily["Volume"].iloc[-6:-1]
+        )
 
         average_daily_volume = float(
             previous_volumes.mean()
@@ -293,13 +329,17 @@ def calculate_stock(symbol):
         if average_daily_volume <= 0:
             return None
 
-        # Relative volume
+        # -------------------------------------------------
+        # Relative Volume
+        # -------------------------------------------------
         rel_volume = (
             session_volume
             / average_daily_volume
         )
 
-        current_time = datetime.now().strftime("%H:%M:%S")
+        current_time = datetime.now().strftime(
+            "%H:%M:%S"
+        )
 
         return {
             "Time": current_time,
@@ -325,7 +365,9 @@ def run_scanner():
 
     total = len(stock_universe)
 
-    for i, symbol in enumerate(stock_universe):
+    for i, symbol in enumerate(
+        stock_universe
+    ):
 
         result = calculate_stock(symbol)
 
@@ -348,9 +390,14 @@ def run_scanner():
 # SESSION STATE
 # =========================================================
 if "scanner_data" not in st.session_state:
-    st.session_state.scanner_data = pd.DataFrame()
+
+    st.session_state.scanner_data = (
+        pd.DataFrame()
+    )
+
 
 if "selected_ticker" not in st.session_state:
+
     st.session_state.selected_ticker = "AAPL"
 
 
@@ -362,7 +409,9 @@ if (
     or st.session_state.scanner_data.empty
 ):
 
-    st.session_state.scanner_data = run_scanner()
+    st.session_state.scanner_data = (
+        run_scanner()
+    )
 
 
 # =========================================================
@@ -380,7 +429,7 @@ if not data.empty:
         & (data["% Change"] >= min_change)
     ].copy()
 
-    # Highest RVOL first
+    # Highest Relative Volume first
     filtered = filtered.sort_values(
         by="Rel Vol",
         ascending=False
@@ -393,21 +442,24 @@ else:
 
 # =========================================================
 # MAIN DASHBOARD
+# 35% SCANNER / 65% CHART
 # =========================================================
 scanner_col, chart_col = st.columns(
-    [40, 60],
+    [35, 65],
     gap="small"
 )
 
 
 # =========================================================
-# LEFT — SCANNER
+# LEFT SIDE — SCANNER 35%
 # =========================================================
 with scanner_col:
 
     st.markdown("**📊 Scanner**")
 
-    # Column headers
+    # -----------------------------------------------------
+    # Column headings
+    # -----------------------------------------------------
     h1, h2, h3, h4, h5 = st.columns(
         [1.1, 1.3, 1.15, 1.25, 1.1]
     )
@@ -420,6 +472,9 @@ with scanner_col:
 
     st.markdown("---")
 
+    # -----------------------------------------------------
+    # Scanner table
+    # -----------------------------------------------------
     with st.container(
         height=DASHBOARD_HEIGHT - 45,
         border=False
@@ -439,10 +494,12 @@ with scanner_col:
                     [1.1, 1.3, 1.15, 1.25, 1.1]
                 )
 
+                # Time
                 c1.write(
                     row["Time"]
                 )
 
+                # Clickable symbol
                 if c2.button(
                     row["Symbol"],
                     key=f"stock_{row['Symbol']}",
@@ -455,31 +512,39 @@ with scanner_col:
 
                     st.rerun()
 
+                # LTP
                 c3.write(
                     f"${row['LTP']:.2f}"
                 )
 
+                # Percentage change
                 c4.write(
                     f"{row['% Change']:.2f}%"
                 )
 
+                # Relative volume
+                # Number only — no X
                 c5.write(
                     f"{row['Rel Vol']:.2f}"
                 )
 
 
 # =========================================================
-# RIGHT — TRADINGVIEW
+# RIGHT SIDE — TRADINGVIEW 65%
 # =========================================================
 with chart_col:
 
-    selected = st.session_state.selected_ticker
+    selected = (
+        st.session_state.selected_ticker
+    )
 
     st.markdown(
         f"**📈 {selected} — TradingView**"
     )
 
-    # Some stocks are listed on NYSE rather than NASDAQ
+    # -----------------------------------------------------
+    # Exchange mapping
+    # -----------------------------------------------------
     nyse_symbols = {
         "GME",
         "AMC",
@@ -488,10 +553,21 @@ with chart_col:
     }
 
     if selected in nyse_symbols:
-        tv_symbol = f"NYSE:{selected}"
-    else:
-        tv_symbol = f"NASDAQ:{selected}"
 
+        tv_symbol = (
+            f"NYSE:{selected}"
+        )
+
+    else:
+
+        tv_symbol = (
+            f"NASDAQ:{selected}"
+        )
+
+
+    # =====================================================
+    # TRADINGVIEW ADVANCED CHART
+    # =====================================================
     tradingview_html = f"""
     <!DOCTYPE html>
 
@@ -535,10 +611,13 @@ with chart_col:
 
     <body>
 
-        <div class="tradingview-widget-container">
+        <div
+            class="tradingview-widget-container"
+        >
 
             <div
-                class="tradingview-widget-container__widget">
+                class="tradingview-widget-container__widget"
+            >
             </div>
 
             <script
@@ -549,21 +628,37 @@ with chart_col:
 
             {{
                 "autosize": true,
+
                 "symbol": "{tv_symbol}",
+
                 "interval": "5",
+
                 "timezone": "America/New_York",
+
                 "theme": "dark",
+
                 "style": "1",
+
                 "locale": "en",
+
                 "allow_symbol_change": true,
+
                 "hide_top_toolbar": false,
+
                 "hide_side_toolbar": false,
+
                 "save_image": true,
+
                 "details": false,
+
                 "hotlist": false,
+
                 "calendar": false,
+
                 "withdateranges": true,
+
                 "hide_volume": false,
+
                 "support_host": "https://www.tradingview.com"
             }}
 
