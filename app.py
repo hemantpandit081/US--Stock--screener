@@ -122,13 +122,19 @@ DEFAULT_SETTINGS = {
     "min_rvol": 2.0,
     "min_change": 2.0,
 
-    # Maximum number of stocks DISPLAYED
-    # Not the number of stocks scanned
+    # Maximum stocks DISPLAYED
     "max_stocks": 300,
 
+    # Current 1-minute volume must reach this % of
+    # previous highest 1-minute volume
     "repeat_tolerance": 90,
+
+    # Automatic scan interval
     "refresh_seconds": 60,
-    "auto_scanner": True,
+
+    # IMPORTANT:
+    # OFF at startup so the page loads immediately.
+    "auto_scanner": False,
 }
 
 
@@ -208,7 +214,7 @@ def load_settings():
         refresh_seconds = 60
 
     auto_scanner = bool(
-        s.get("auto_scanner", True)
+        s.get("auto_scanner", False)
     )
 
     min_price = max(0.01, min_price)
@@ -304,6 +310,7 @@ def load_russell_2000():
                     "Ticker" in line
                     and "Name" in line
                 ):
+
                     start = i
                     break
 
@@ -350,8 +357,6 @@ def load_russell_2000():
                         if symbol.lower() == "nan":
                             continue
 
-                        # Yahoo Finance uses '-' instead
-                        # of '.' for some symbols.
                         if "." in symbol:
                             continue
 
@@ -378,7 +383,7 @@ def load_russell_2000():
 
 
     # ========================================================
-    # FALLBACK UNIVERSE
+    # FALLBACK
     # ========================================================
 
     return [
@@ -626,7 +631,7 @@ def scan_batch(
 
 
             # ------------------------------------------------
-            # CLEAN
+            # CLEAN DATA
             # ------------------------------------------------
 
             intra_df = intra_df.copy()
@@ -665,7 +670,7 @@ def scan_batch(
 
 
             # ------------------------------------------------
-            # PRICE
+            # PRICE FILTER
             # ------------------------------------------------
 
             if ltp < settings["min_price"]:
@@ -724,7 +729,7 @@ def scan_batch(
 
 
             # ------------------------------------------------
-            # PERCENT CHANGE
+            # % CHANGE
             # ------------------------------------------------
 
             percent_change = (
@@ -790,7 +795,7 @@ def scan_batch(
 
 
             # ------------------------------------------------
-            # REPEAT
+            # REPEAT VOLUME
             # ------------------------------------------------
 
             repeat = detect_repeat(
@@ -831,7 +836,7 @@ def scan_batch(
 
 
             # ------------------------------------------------
-            # RESULT
+            # SAVE RESULT
             # ------------------------------------------------
 
             results.append(
@@ -865,10 +870,6 @@ def run_scanner():
 
     settings = load_settings()
 
-    # IMPORTANT:
-    # Scan the complete universe.
-    # max_stocks controls DISPLAYED results only.
-
     symbols = load_russell_2000()
 
     total_symbols = len(symbols)
@@ -891,7 +892,7 @@ def run_scanner():
 
 
     # ========================================================
-    # BATCHES
+    # BATCH SCANNING
     # ========================================================
 
     batch_size = 50
@@ -949,8 +950,6 @@ def run_scanner():
             drop=True
         )
 
-        # IMPORTANT:
-        # Only limit displayed results here.
         df = df.head(
             settings["max_stocks"]
         )
@@ -999,7 +998,6 @@ def show_tradingview(symbol):
     symbol = str(
         symbol
     ).upper().strip()
-
 
     html = f"""
     <!DOCTYPE html>
@@ -1094,7 +1092,6 @@ def show_tradingview(symbol):
     </html>
     """
 
-
     components.html(
         html,
         height=720,
@@ -1146,9 +1143,7 @@ def show_filters():
             "### Scanner Filters"
         )
 
-
         col1, col2 = st.columns(2)
-
 
         with col1:
 
@@ -1162,7 +1157,6 @@ def show_filters():
                 format="%.2f"
             )
 
-
             max_price = st.number_input(
                 "Max price",
                 min_value=0.01,
@@ -1173,7 +1167,6 @@ def show_filters():
                 format="%.2f"
             )
 
-
             min_volume = st.number_input(
                 "Min volume",
                 min_value=0,
@@ -1182,7 +1175,6 @@ def show_filters():
                 ),
                 step=10000
             )
-
 
             min_rvol = st.number_input(
                 "Min Rel Vol",
@@ -1193,7 +1185,6 @@ def show_filters():
                 step=0.5,
                 format="%.1f"
             )
-
 
         with col2:
 
@@ -1207,7 +1198,6 @@ def show_filters():
                 format="%.1f"
             )
 
-
             max_stocks = st.number_input(
                 "Max stocks to display",
                 min_value=1,
@@ -1216,7 +1206,6 @@ def show_filters():
                 ),
                 step=50
             )
-
 
             repeat_tolerance = st.number_input(
                 "Repeat tolerance %",
@@ -1229,7 +1218,6 @@ def show_filters():
                 format="%.0f"
             )
 
-
             refresh_seconds = st.number_input(
                 "Refresh seconds",
                 min_value=10,
@@ -1239,14 +1227,12 @@ def show_filters():
                 step=10
             )
 
-
         auto_scanner = st.checkbox(
             "Auto scanner",
             value=bool(
                 current["auto_scanner"]
             )
         )
-
 
         if st.button(
             "Apply Settings",
@@ -1302,7 +1288,6 @@ def show_diagnostics():
     if not diagnostics:
         return
 
-
     with st.expander(
         "Scan diagnostics",
         expanded=False
@@ -1351,7 +1336,6 @@ def show_diagnostics():
 def display_scanner():
 
     df = st.session_state.scan_results
-
 
     st.markdown(
         '<div class="scanner-title">'
@@ -1419,7 +1403,6 @@ def display_scanner():
         ]
     )
 
-
     for col, text in zip(
         header,
         [
@@ -1482,7 +1465,6 @@ def display_scanner():
                 ]
             )
 
-
             with symbol_columns[0]:
 
                 if st.button(
@@ -1534,7 +1516,7 @@ def display_scanner():
 
 
         # ----------------------------------------------------
-        # CHANGE
+        # % CHANGE
         # ----------------------------------------------------
 
         with cols[3]:
@@ -1651,19 +1633,31 @@ scanner_col, chart_col = st.columns(
 
 
 # ============================================================
-# AUTO SCANNER + LEFT SCANNER
-#
-# IMPORTANT:
-# The scanner DISPLAY is inside the fragment.
-# The TradingView chart is OUTSIDE the fragment.
+# LEFT SIDE
 # ============================================================
 
 with scanner_col:
 
     settings = load_settings()
 
+    # --------------------------------------------------------
+    # DISPLAY SCANNER FIRST
+    # --------------------------------------------------------
 
-    if settings["auto_scanner"]:
+    display_scanner()
+
+
+    # --------------------------------------------------------
+    # AUTO SCANNER
+    #
+    # IMPORTANT:
+    # It will NOT start before the first scan.
+    # --------------------------------------------------------
+
+    if (
+        settings["auto_scanner"]
+        and st.session_state.scan_results is not None
+    ):
 
         try:
 
@@ -1674,7 +1668,6 @@ with scanner_col:
             )
             def automatic_scan():
 
-                # Only scan during regular market hours
                 if regular_market_hours():
 
                     try:
@@ -1692,20 +1685,15 @@ with scanner_col:
 
             automatic_scan()
 
-        except Exception:
+        except Exception as e:
 
-            # Fallback if fragment is unavailable
-            display_scanner()
-
-    else:
-
-        display_scanner()
+            st.session_state.scan_status = (
+                f"Auto scanner unavailable: {e}"
+            )
 
 
 # ============================================================
-# RIGHT TRADINGVIEW
-#
-# NOT INSIDE FRAGMENT
+# RIGHT SIDE - TRADINGVIEW
 # ============================================================
 
 with chart_col:
@@ -1733,6 +1721,7 @@ with chart_col:
                 background:#131722;
                 color:#aaaaaa;
                 font-size:18px;
+                border-radius:6px;
             ">
                 Select a stock from the scanner
                 to open TradingView
@@ -1740,4 +1729,3 @@ with chart_col:
             """,
             unsafe_allow_html=True
         )
-        
