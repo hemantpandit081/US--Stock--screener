@@ -4,479 +4,331 @@ import pandas as pd
 import numpy as np
 import streamlit.components.v1 as components
 
-# ============================================================
-# PAGE CONFIG
-# ============================================================
+# ---------------------------------------------------------
+# PAGE SETTINGS
+# ---------------------------------------------------------
 
 st.set_page_config(
     page_title="US Stock Scanner",
-    page_icon="📈",
     layout="wide",
     initial_sidebar_state="collapsed"
 )
 
-# ============================================================
-# CUSTOM CSS
-# ============================================================
-
-st.markdown("""
-<style>
-
-    /* Main background */
-    .stApp {
-        background-color: #0e1117;
-    }
-
-    /* Remove excessive top padding */
-    .block-container {
-        padding-top: 1rem;
-        padding-bottom: 0rem;
-    }
-
-    /* Stock buttons */
-    div.stButton > button {
-        width: 100%;
-        text-align: left;
-        background-color: #151a21;
-        color: white;
-        border: 1px solid #252c35;
-        border-radius: 5px;
-        padding: 7px 10px;
-        margin-bottom: 3px;
-        height: 38px;
-    }
-
-    div.stButton > button:hover {
-        background-color: #202832;
-        border-color: #4b9cff;
-        color: white;
-    }
-
-    /* Filter box */
-    .filter-box {
-        background-color: #151a21;
-        border: 1px solid #252c35;
-        border-radius: 7px;
-        padding: 15px;
-        margin-bottom: 12px;
-    }
-
-    /* Header */
-    .scanner-header {
-        font-size: 20px;
-        font-weight: 700;
-        margin-bottom: 10px;
-    }
-
-    .small-text {
-        color: #8995a3;
-        font-size: 12px;
-    }
-
-    /* Stock count */
-    .stock-count {
-        color: #8995a3;
-        font-size: 12px;
-        margin-bottom: 8px;
-    }
-
-</style>
-""", unsafe_allow_html=True)
-
-# ============================================================
-# STOCK UNIVERSE
-# ============================================================
+# ---------------------------------------------------------
+# STOCK LIST
+# ---------------------------------------------------------
 
 STOCKS = [
-    "AAPL",
-    "MSFT",
-    "NVDA",
-    "AMZN",
-    "META",
-    "TSLA",
-    "GOOGL",
-    "GOOG",
-    "AVGO",
-    "AMD",
-    "NFLX",
-    "PLTR",
-    "MU",
-    "INTC",
-    "SMCI",
-    "ARM",
-    "MSTR",
-    "COIN",
-    "HOOD",
-    "SOFI",
-    "RIVN",
-    "NIO",
-    "XPEV",
-    "LI",
-    "SOUN",
-    "BBAI",
-    "IONQ",
-    "RKLB",
-    "LUNR",
-    "OKLO",
+    "AAPL", "MSFT", "NVDA", "AMZN", "META",
+    "TSLA", "GOOGL", "GOOG", "AVGO", "AMD",
+    "NFLX", "PLTR", "MU", "INTC", "SMCI",
+    "ARM", "MSTR", "COIN", "HOOD", "SOFI",
+    "RIVN", "NIO", "XPEV", "LI", "SOUN",
+    "BBAI", "IONQ", "RKLB", "LUNR", "OKLO"
 ]
 
-# ============================================================
+# ---------------------------------------------------------
 # SESSION STATE
-# ============================================================
+# ---------------------------------------------------------
 
 if "selected_stock" not in st.session_state:
-    st.session_state.selected_stock = "AAPL"
+    st.session_state.selected_stock = "NVDA"
 
 if "show_filters" not in st.session_state:
     st.session_state.show_filters = False
 
-if "scan_data" not in st.session_state:
-    st.session_state.scan_data = pd.DataFrame()
+# ---------------------------------------------------------
+# HEADER
+# ---------------------------------------------------------
 
-# ============================================================
-# FILTER TOGGLE
-# ============================================================
+col1, col2 = st.columns([8, 2])
 
-top_left, top_right = st.columns([5, 1])
+with col1:
+    st.title("US Stock Scanner")
 
-with top_left:
-    st.markdown(
-        '<div class="scanner-header">US Stock Scanner</div>',
-        unsafe_allow_html=True
-    )
+with col2:
+    if st.button(
+        "⚙ Filters",
+        use_container_width=True
+    ):
+        st.session_state.show_filters = not st.session_state.show_filters
 
-with top_right:
-    if st.button("⚙ Filters", use_container_width=True):
-        st.session_state.show_filters = (
-            not st.session_state.show_filters
-        )
-        st.rerun()
-
-# ============================================================
+# ---------------------------------------------------------
 # FILTERS
-# ============================================================
-
-min_price = 1.0
-max_price = 100.0
-min_volume = 100000
-min_change = 0.0
-min_rvol = 0.0
-search_text = ""
-sort_by = "RVOL"
+# ---------------------------------------------------------
 
 if st.session_state.show_filters:
 
-    with st.container():
+    st.markdown("### Scanner Filters")
 
-        st.markdown(
-            '<div class="filter-box">',
-            unsafe_allow_html=True
+    c1, c2, c3, c4, c5 = st.columns(5)
+
+    with c1:
+        min_price = st.number_input(
+            "Min Price",
+            min_value=0.0,
+            value=1.0,
+            step=0.50
         )
 
-        c1, c2, c3, c4, c5 = st.columns(5)
-
-        with c1:
-            min_price = st.number_input(
-                "Min price",
-                min_value=0.0,
-                value=1.0,
-                step=0.50
-            )
-
-        with c2:
-            max_price = st.number_input(
-                "Max price",
-                min_value=0.0,
-                value=100.0,
-                step=1.0
-            )
-
-        with c3:
-            min_volume = st.number_input(
-                "Min volume",
-                min_value=0,
-                value=100000,
-                step=100000
-            )
-
-        with c4:
-            min_change = st.number_input(
-                "Min % change",
-                value=0.0,
-                step=0.5
-            )
-
-        with c5:
-            min_rvol = st.number_input(
-                "Min RVOL",
-                min_value=0.0,
-                value=0.0,
-                step=0.5
-            )
-
-        c6, c7 = st.columns([3, 1])
-
-        with c6:
-            search_text = st.text_input(
-                "Search ticker",
-                placeholder="Example: NVDA"
-            )
-
-        with c7:
-            sort_by = st.selectbox(
-                "Sort",
-                [
-                    "RVOL",
-                    "% Change",
-                    "Volume",
-                    "Price"
-                ]
-            )
-
-        st.markdown(
-            '</div>',
-            unsafe_allow_html=True
+    with c2:
+        max_price = st.number_input(
+            "Max Price",
+            min_value=1.0,
+            value=100.0,
+            step=1.0
         )
 
-# ============================================================
-# DATA DOWNLOAD
-# ============================================================
+    with c3:
+        min_volume = st.number_input(
+            "Minimum Volume",
+            min_value=0,
+            value=100000,
+            step=10000
+        )
 
-@st.cache_data(ttl=60, show_spinner=False)
-def download_market_data(symbols):
+    with c4:
+        min_change = st.number_input(
+            "Minimum % Change",
+            value=0.0,
+            step=0.5
+        )
+
+    with c5:
+        min_rvol = st.number_input(
+            "Minimum RVOL",
+            min_value=0.0,
+            value=0.0,
+            step=0.5
+        )
+
+    st.divider()
+
+# ---------------------------------------------------------
+# SEARCH / SORT
+# ---------------------------------------------------------
+
+c1, c2 = st.columns([3, 2])
+
+with c1:
+    search = st.text_input(
+        "Search stock",
+        placeholder="Enter ticker..."
+    ).upper().strip()
+
+with c2:
+    sort_by = st.selectbox(
+        "Sort by",
+        [
+            "RVOL",
+            "% Change",
+            "Volume",
+            "Price"
+        ]
+    )
+
+# ---------------------------------------------------------
+# DEFAULT FILTER VALUES
+# ---------------------------------------------------------
+
+if not st.session_state.show_filters:
+    min_price = 1.0
+    max_price = 100.0
+    min_volume = 100000
+    min_change = 0.0
+    min_rvol = 0.0
+
+# ---------------------------------------------------------
+# DOWNLOAD DATA
+# ---------------------------------------------------------
+
+@st.cache_data(ttl=60)
+def get_stock_data():
 
     try:
 
         data = yf.download(
-            list(symbols),
+            STOCKS,
             period="1mo",
             interval="1d",
             auto_adjust=False,
-            progress=False,
             group_by="ticker",
-            threads=True
+            threads=True,
+            progress=False
         )
 
-        return data
+        results = []
 
-    except Exception as e:
+        for ticker in STOCKS:
 
-        st.error(f"Data error: {e}")
+            try:
 
-        return pd.DataFrame()
-
-
-# ============================================================
-# BUILD SCANNER DATA
-# ============================================================
-
-def build_scanner_data():
-
-    data = download_market_data(
-        tuple(STOCKS)
-    )
-
-    results = []
-
-    if data.empty:
-        return pd.DataFrame()
-
-    for symbol in STOCKS:
-
-        try:
-
-            if isinstance(data.columns, pd.MultiIndex):
-
-                if symbol not in data.columns.get_level_values(0):
+                if ticker not in data:
                     continue
 
-                df = data[symbol].copy()
+                df = data[ticker].copy()
 
-            else:
+                if df.empty:
+                    continue
 
-                df = data.copy()
+                df = df.dropna()
 
-            df = df.dropna(
-                subset=["Close", "Volume"]
-            )
+                if len(df) < 2:
+                    continue
 
-            if len(df) < 2:
-                continue
+                close = float(df["Close"].iloc[-1])
+                volume = float(df["Volume"].iloc[-1])
 
-            latest = df.iloc[-1]
+                previous_volumes = df["Volume"].iloc[:-1].tail(20)
 
-            price = float(
-                latest["Close"]
-            )
+                if len(previous_volumes) > 0:
+                    average_volume = float(
+                        previous_volumes.mean()
+                    )
+                else:
+                    average_volume = 0
 
-            volume = float(
-                latest["Volume"]
-            )
+                if average_volume > 0:
+                    rvol = volume / average_volume
+                else:
+                    rvol = 0
 
-            previous_close = float(
-                df.iloc[-2]["Close"]
-            )
-
-            if previous_close <= 0:
-                continue
-
-            change = (
-                (price - previous_close)
-                / previous_close
-            ) * 100
-
-            # Previous 20 trading days
-            previous_volumes = (
-                df["Volume"]
-                .iloc[:-1]
-                .tail(20)
-            )
-
-            average_volume = (
-                previous_volumes.mean()
-                if len(previous_volumes)
-                else 0
-            )
-
-            if average_volume > 0:
-                rvol = (
-                    volume /
-                    average_volume
-                )
-            else:
-                rvol = 0
-
-            results.append({
-
-                "Ticker": symbol,
-
-                "Price": round(
-                    price,
-                    2
-                ),
-
-                "Change": round(
-                    change,
-                    2
-                ),
-
-                "Volume": int(
-                    volume
-                ),
-
-                "RVOL": round(
-                    rvol,
-                    2
+                previous_close = float(
+                    df["Close"].iloc[-2]
                 )
 
-            })
+                if previous_close > 0:
+                    change = (
+                        (close - previous_close)
+                        / previous_close
+                    ) * 100
+                else:
+                    change = 0
 
-        except Exception:
-            continue
+                results.append({
+                    "Ticker": ticker,
+                    "Price": close,
+                    "Volume": int(volume),
+                    "RVOL": round(rvol, 2),
+                    "% Change": round(change, 2)
+                })
 
-    if not results:
+            except Exception:
+                continue
+
+        return pd.DataFrame(results)
+
+    except Exception:
         return pd.DataFrame()
 
-    return pd.DataFrame(results)
 
+# ---------------------------------------------------------
+# LOAD DATA
+# ---------------------------------------------------------
 
-# ============================================================
-# RUN SCANNER
-# ============================================================
+with st.spinner("Loading stocks..."):
+    df = get_stock_data()
 
-with st.spinner("Scanning US stocks..."):
+# ---------------------------------------------------------
+# HANDLE EMPTY DATA
+# ---------------------------------------------------------
 
-    scanner = build_scanner_data()
+if df.empty:
 
-# ============================================================
-# FILTER DATA
-# ============================================================
+    st.warning(
+        "No stock data available. Please try again."
+    )
 
-if not scanner.empty:
+    st.stop()
 
-    scanner = scanner[
-        (scanner["Price"] >= min_price) &
-        (scanner["Price"] <= max_price) &
-        (scanner["Volume"] >= min_volume) &
-        (scanner["Change"] >= min_change) &
-        (scanner["RVOL"] >= min_rvol)
+# ---------------------------------------------------------
+# APPLY FILTERS
+# ---------------------------------------------------------
+
+df = df[
+    (df["Price"] >= min_price) &
+    (df["Price"] <= max_price) &
+    (df["Volume"] >= min_volume) &
+    (df["% Change"] >= min_change) &
+    (df["RVOL"] >= min_rvol)
+]
+
+# ---------------------------------------------------------
+# SEARCH
+# ---------------------------------------------------------
+
+if search:
+
+    df = df[
+        df["Ticker"].str.contains(
+            search,
+            case=False,
+            na=False
+        )
     ]
 
-    if search_text:
+# ---------------------------------------------------------
+# SORT
+# ---------------------------------------------------------
 
-        scanner = scanner[
-            scanner["Ticker"]
-            .str.contains(
-                search_text.upper(),
-                na=False
-            )
-        ]
+if sort_by == "RVOL":
+    df = df.sort_values(
+        "RVOL",
+        ascending=False
+    )
 
-    # Sorting
+elif sort_by == "% Change":
+    df = df.sort_values(
+        "% Change",
+        ascending=False
+    )
 
-    if sort_by == "RVOL":
+elif sort_by == "Volume":
+    df = df.sort_values(
+        "Volume",
+        ascending=False
+    )
 
-        scanner = scanner.sort_values(
-            "RVOL",
-            ascending=False
-        )
+elif sort_by == "Price":
+    df = df.sort_values(
+        "Price",
+        ascending=False
+    )
 
-    elif sort_by == "% Change":
-
-        scanner = scanner.sort_values(
-            "Change",
-            ascending=False
-        )
-
-    elif sort_by == "Volume":
-
-        scanner = scanner.sort_values(
-            "Volume",
-            ascending=False
-        )
-
-    elif sort_by == "Price":
-
-        scanner = scanner.sort_values(
-            "Price",
-            ascending=False
-        )
-
-# ============================================================
-# LAYOUT
-# ============================================================
+# ---------------------------------------------------------
+# MAIN SCREEN
+# ---------------------------------------------------------
 
 left, right = st.columns(
-    [1.0, 3.2],
-    gap="small"
+    [2, 8],
+    gap="medium"
 )
 
-# ============================================================
-# LEFT SIDE - STOCK LIST
-# ============================================================
+# ---------------------------------------------------------
+# LEFT - STOCK LIST
+# ---------------------------------------------------------
 
 with left:
 
-    st.markdown(
-        f'<div class="stock-count">'
-        f'{len(scanner)} stocks'
-        f'</div>',
-        unsafe_allow_html=True
-    )
+    st.markdown("### Stocks")
 
-    if scanner.empty:
+    if df.empty:
 
-        st.warning(
-            "No stocks match the filters."
+        st.info(
+            "No stocks match your filters."
         )
 
     else:
 
-        for _, row in scanner.iterrows():
+        for _, row in df.iterrows():
 
             ticker = row["Ticker"]
 
-            button_text = ticker
+            button_text = (
+                f"{ticker}  "
+                f"${row['Price']:.2f}  "
+                f"{row['% Change']:+.1f}%"
+            )
 
             if st.button(
                 button_text,
@@ -486,102 +338,63 @@ with left:
 
                 st.session_state.selected_stock = ticker
 
-                st.rerun()
-
-# ============================================================
-# RIGHT SIDE - TRADINGVIEW
-# ============================================================
+# ---------------------------------------------------------
+# RIGHT - TRADINGVIEW CHART
+# ---------------------------------------------------------
 
 with right:
 
-    selected = (
-        st.session_state.selected_stock
-    )
+    selected = st.session_state.selected_stock
 
     st.markdown(
-        f"""
-        <div style="
-            font-size:15px;
-            font-weight:600;
-            margin-bottom:5px;
-        ">
-            {selected}
-        </div>
-        """,
-        unsafe_allow_html=True
+        f"### {selected}"
     )
 
-    tradingview_html = f"""
-    <div class="tradingview-widget-container"
-         style="height:calc(100vh - 100px);width:100%">
+    chart_html = f"""
+    <div style="height:720px;width:100%;">
+        <div
+            class="tradingview-widget-container"
+            style="height:100%;width:100%;"
+        >
 
-        <div id="tradingview_chart"
-             style="height:100%;width:100%">
-        </div>
+            <div
+                class="tradingview-widget-container__widget"
+                style="height:100%;width:100%;"
+            ></div>
 
-        <script
-            type="text/javascript"
-            src="https://s3.tradingview.com/tv.js">
-        </script>
-
-        <script type="text/javascript">
-
-            new TradingView.widget({{
-
+            <script
+                type="text/javascript"
+                src="https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js"
+                async>
+            {{
                 "autosize": true,
-
                 "symbol": "NASDAQ:{selected}",
-
                 "interval": "5",
-
-                "timezone": "America/New_York",
-
+                "timezone": "Australia/Adelaide",
                 "theme": "dark",
-
                 "style": "1",
-
                 "locale": "en",
+                "allow_symbol_change": true,
+                "calendar": false,
+                "support_host": "https://www.tradingview.com"
+            }}
+            </script>
 
-                "toolbar_bg": "#0e1117",
-
-                "enable_publishing": false,
-
-                "hide_top_toolbar": false,
-
-                "hide_legend": false,
-
-                "save_image": false,
-
-                "container_id": "tradingview_chart"
-
-            }});
-
-        </script>
-
+        </div>
     </div>
     """
 
     components.html(
-        tradingview_html,
-        height=750,
+        chart_html,
+        height=730,
         scrolling=False
     )
 
-# ============================================================
+# ---------------------------------------------------------
 # FOOTER
-# ============================================================
+# ---------------------------------------------------------
 
-st.markdown(
-    """
-    <div style="
-        position:fixed;
-        bottom:3px;
-        left:10px;
-        font-size:10px;
-        color:#5f6b77;
-    ">
-        Prototype data: Yahoo Finance / yfinance
-    </div>
-    """,
-    unsafe_allow_html=True
+st.caption(
+    "Prototype scanner using Yahoo Finance data • "
+    "TradingView chart"
 )
