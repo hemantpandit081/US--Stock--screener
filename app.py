@@ -506,8 +506,4 @@ with chart_col:
 # AUTO REFRESH
 # =========================
 
-if auto_refresh:
 
-    time.sleep(refresh_seconds)
-
-    st.rerun()
