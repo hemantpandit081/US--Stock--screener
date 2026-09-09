@@ -1,6 +1,5 @@
 import streamlit as st
 import yfinance as yf
-import pandas as pd
 from datetime import datetime
 from zoneinfo import ZoneInfo
 import streamlit.components.v1 as components
@@ -20,30 +19,42 @@ st.set_page_config(
 
 
 # ============================================================
-# CSS
+# CSS — FIT DASHBOARD TO SCREEN
 # ============================================================
 
 st.markdown("""
 <style>
 
+html, body {
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+}
+
 .block-container {
-    padding-top: 0.8rem;
-    padding-bottom: 0.5rem;
-    padding-left: 1rem;
-    padding-right: 1rem;
+    padding-top: 0.35rem;
+    padding-bottom: 0rem;
+    padding-left: 0.8rem;
+    padding-right: 0.8rem;
 }
 
 h1 {
-    margin-bottom: 0.2rem;
+    margin-top: 0;
+    margin-bottom: 0.1rem;
+    font-size: 1.8rem;
 }
 
 h2, h3 {
-    margin-top: 0.2rem;
-    margin-bottom: 0.4rem;
+    margin-top: 0.1rem;
+    margin-bottom: 0.2rem;
 }
 
 div[data-testid="stHorizontalBlock"] {
     gap: 0.5rem;
+}
+
+section[data-testid="stSidebar"] {
+    overflow-y: auto;
 }
 
 </style>
@@ -84,6 +95,7 @@ def load_saved_settings():
             return settings
 
         except Exception:
+
             return DEFAULT_SETTINGS.copy()
 
     return DEFAULT_SETTINGS.copy()
@@ -152,14 +164,17 @@ if "settings_loaded" not in st.session_state:
 # ============================================================
 
 if "scanner_data" not in st.session_state:
+
     st.session_state.scanner_data = []
 
 
 if "selected_ticker" not in st.session_state:
+
     st.session_state.selected_ticker = "AAPL"
 
 
 if "last_scan_time" not in st.session_state:
+
     st.session_state.last_scan_time = None
 
 
@@ -219,6 +234,7 @@ def market_is_open():
     now = get_market_time()
 
     if now.weekday() >= 5:
+
         return False
 
     current_time = now.time()
@@ -249,7 +265,7 @@ def calculate_stock(symbol):
     try:
 
         # ----------------------------------------------------
-        # 5 MINUTE DATA
+        # INTRADAY DATA
         # ----------------------------------------------------
 
         intraday = yf.Ticker(
@@ -262,6 +278,7 @@ def calculate_stock(symbol):
         )
 
         if intraday.empty:
+
             return None
 
         intraday = intraday.dropna(
@@ -272,6 +289,7 @@ def calculate_stock(symbol):
         )
 
         if intraday.empty:
+
             return None
 
         # ----------------------------------------------------
@@ -287,6 +305,7 @@ def calculate_stock(symbol):
         ].copy()
 
         if session_data.empty:
+
             return None
 
         # ----------------------------------------------------
@@ -300,7 +319,7 @@ def calculate_stock(symbol):
         )
 
         # ----------------------------------------------------
-        # FULL SESSION VOLUME
+        # SESSION VOLUME
         # ----------------------------------------------------
 
         session_volume = float(
@@ -323,6 +342,7 @@ def calculate_stock(symbol):
         )
 
         if daily.empty:
+
             return None
 
         daily = daily.dropna(
@@ -333,6 +353,7 @@ def calculate_stock(symbol):
         )
 
         if len(daily) < 6:
+
             return None
 
         # ----------------------------------------------------
@@ -414,7 +435,7 @@ def calculate_stock(symbol):
         )
 
         # ----------------------------------------------------
-        # RETURN DATA
+        # RETURN
         # ----------------------------------------------------
 
         return {
@@ -610,9 +631,9 @@ with st.sidebar:
 
     st.markdown("---")
 
-    # ========================================================
+    # --------------------------------------------------------
     # SAVE SETTINGS
-    # ========================================================
+    # --------------------------------------------------------
 
     if st.button(
         "💾 Save Filter Settings",
@@ -646,9 +667,9 @@ with st.sidebar:
                 "Filter settings saved!"
             )
 
-    # ========================================================
-    # RESET SETTINGS
-    # ========================================================
+    # --------------------------------------------------------
+    # RESET
+    # --------------------------------------------------------
 
     if st.button(
         "↩ Reset to Default",
@@ -679,9 +700,9 @@ with st.sidebar:
 
     st.markdown("---")
 
-    # ========================================================
-    # SCAN BUTTON
-    # ========================================================
+    # --------------------------------------------------------
+    # SCAN
+    # --------------------------------------------------------
 
     scan_button = st.button(
         "🔍 Scan Now",
@@ -731,7 +752,8 @@ if st.session_state.last_scan_time:
 # ============================================================
 
 scanner_col, chart_col = st.columns(
-    [35, 65]
+    [35, 65],
+    gap="small"
 )
 
 
@@ -801,7 +823,7 @@ with scanner_col:
         )
 
         # ----------------------------------------------------
-        # TABLE HEADER
+        # SCANNER HEADER
         # ----------------------------------------------------
 
         h1, h2, h3, h4, h5 = st.columns(
@@ -881,13 +903,12 @@ with scanner_col:
                 f"{row['% Change']:.2f}%"
             )
 
-            # Rel Vol number only
             c5.write(
                 f"{row['Rel Vol']:.1f}"
             )
 
         # ----------------------------------------------------
-        # MATCH COUNT
+        # RESULTS
         # ----------------------------------------------------
 
         st.caption(
@@ -942,7 +963,7 @@ with chart_col:
         )
 
     # ========================================================
-    # SQUARE TRADINGVIEW CONTAINER
+    # TRADINGVIEW HTML
     # ========================================================
 
     tradingview_html = f"""
@@ -958,17 +979,13 @@ with chart_col:
             overflow: hidden;
         }}
 
-        .tv-square {{
+        .tradingview-wrapper {{
             width: 100%;
-            aspect-ratio: 1 / 1;
-            position: relative;
+            height: 100%;
             overflow: hidden;
         }}
 
         .tradingview-widget-container {{
-            position: absolute;
-            left: 0;
-            top: 0;
             width: 100%;
             height: 100%;
         }}
@@ -979,7 +996,6 @@ with chart_col:
         }}
 
         .tradingview-widget-copyright {{
-            width: 100%;
             height: 32px;
             line-height: 32px;
         }}
@@ -987,7 +1003,7 @@ with chart_col:
     </style>
 
 
-    <div class="tv-square">
+    <div class="tradingview-wrapper">
 
         <div
             class="tradingview-widget-container"
@@ -1025,8 +1041,7 @@ with chart_col:
 
                 "interval": "5",
 
-                "timezone":
-                    "America/New_York",
+                "timezone": "America/New_York",
 
                 "theme": "dark",
 
@@ -1054,7 +1069,7 @@ with chart_col:
 
                 "popup_width": "1000",
 
-                "popup_height": "850",
+                "popup_height": "700",
 
                 "calendar": false,
 
@@ -1075,11 +1090,15 @@ with chart_col:
     """
 
     # ========================================================
-    # STREAMLIT HTML FRAME
+    # HEIGHT
     # ========================================================
+    #
+    # The iframe is deliberately limited so the page itself
+    # does not become taller than the browser window.
+    #
 
     components.html(
         tradingview_html,
-        height=900,
+        height=650,
         scrolling=False
     )
