@@ -366,8 +366,7 @@ if not filtered.empty:
 # LEFT AND RIGHT
 # ============================================================
 
-scanner_col, chart_col = st.columns([40, 60], gap="small"),
-    gap="medium"
+scanner_col, chart_col = st.columns([40, 60])
 )
 
 
