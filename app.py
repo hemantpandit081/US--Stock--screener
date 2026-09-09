@@ -474,7 +474,6 @@ if (
         filtered.iloc[0]["Symbol"]
     )
 
-
 # ============================================================
 # RIGHT SIDE — TRADINGVIEW
 # ============================================================
@@ -483,8 +482,8 @@ with chart_col:
 
     st.subheader("📈 TradingView Chart")
 
-    selected_ticker = (
-        st.session_state.selected_ticker
+    selected_ticker = st.session_state.get(
+        "selected_ticker"
     )
 
     if selected_ticker:
@@ -493,97 +492,39 @@ with chart_col:
             f"Selected: {selected_ticker}"
         )
 
-        tradingview_html = f"""
-        <!DOCTYPE html>
-
-        <html>
-
-        <head>
-
-            <meta charset="UTF-8">
-
-            <script
-                type="text/javascript"
-                src="https://s3.tradingview.com/tv.js">
-            </script>
-
-            <style>
-
-                html,
-                body {{
-
-                    margin: 0;
-                    padding: 0;
-
-                    width: 100%;
-                    height: 100%;
-
-                    overflow: hidden;
-                }}
-
-                #tradingview_chart {{
-
-                    width: 100%;
-                    height: 700px;
-                }}
-
-            </style>
-
-        </head>
-
-        <body>
-
-            <div id="tradingview_chart">
-            </div>
-
-            <script>
-
-                new TradingView.widget({{
-
-                    "container_id":
-                        "tradingview_chart",
-
-                    "autosize": true,
-
-                    "symbol":
-                        "NASDAQ:{selected_ticker}",
-
-                    "interval": "5",
-
-                    "timezone":
-                        "America/New_York",
-
-                    "theme": "dark",
-
-                    "style": "1",
-
-                    "locale": "en",
-
-                    "enable_publishing": false,
-
-                    "allow_symbol_change": true,
-
-                    "hide_top_toolbar": false,
-
-                    "hide_legend": false,
-
-                    "save_image": false,
-
-                    "withdateranges": true,
-
-                    "studies": []
-
-                }});
-
-            </script>
-
-        </body>
-
-        </html>
-        """
+        # TradingView direct embed
+        tradingview_url = (
+            "https://www.tradingview.com/widgetembed/"
+            "?frameElementId=tradingview_chart"
+            "&symbol=NASDAQ%3A"
+            + selected_ticker
+            + "&interval=5"
+            "&hidesidetoolbar=0"
+            "&hidetoptoolbar=0"
+            "&symboledit=1"
+            "&saveimage=0"
+            "&toolbarbg=f1f3f6"
+            "&studies=[]"
+            "&theme=dark"
+            "&style=1"
+            "&timezone=America%2FNew_York"
+            "&withdateranges=1"
+        )
 
         components.html(
-            tradingview_html,
+            f"""
+            <iframe
+                src="{tradingview_url}"
+                style="
+                    width:100%;
+                    height:700px;
+                    border:0;
+                "
+                frameborder="0"
+                allowtransparency="true"
+                scrolling="no">
+            </iframe>
+            """,
             height=710,
             scrolling=False
         )
@@ -593,7 +534,6 @@ with chart_col:
         st.info(
             "Click a stock in the scanner."
         )
-
 
 # ============================================================
 # REFRESH BUTTON
