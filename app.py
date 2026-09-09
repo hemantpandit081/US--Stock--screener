@@ -1264,10 +1264,10 @@ def scanner_fragment():
     # MAIN LAYOUT
     # =====================================================
 
-    scanner_col, chart_col = st.columns(
-        [0.65, 5.35],
-        gap="small"
-    )
+   scanner_col, chart_col = st.columns(
+    [35, 65],
+    gap="small"
+)
 
     # =====================================================
     # LEFT - SCANNER
