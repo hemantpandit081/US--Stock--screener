@@ -4,10 +4,40 @@ import yfinance as yf
 import streamlit.components.v1 as components
 from datetime import datetime
 from zoneinfo import ZoneInfo
+from urllib.parse import quote
+
+# ============================================================
+# PAGE SETUP
+# ============================================================
 
 st.set_page_config(
     page_title="US Stock Momentum Scanner",
-    layout="wide"
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
+
+# Make the dashboard fit the available screen
+st.markdown(
+    """
+    <style>
+    .block-container {
+        padding-top: 1rem;
+        padding-left: 1rem;
+        padding-right: 1rem;
+        padding-bottom: 1rem;
+        max-width: 100%;
+    }
+
+    div[data-testid="stHorizontalBlock"] {
+        gap: 0.5rem;
+    }
+
+    div[data-testid="stButton"] button {
+        width: 100%;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True
 )
 
 st.title("🇺🇸 US Stock Momentum Scanner")
@@ -216,9 +246,7 @@ def calculate_stock(ticker):
 
             previous_volumes = daily_volume.iloc[:-1]
 
-            average_volume = (
-                previous_volumes.mean()
-            )
+            average_volume = previous_volumes.mean()
 
             if average_volume > 0:
 
@@ -363,29 +391,36 @@ if not filtered.empty:
 
 
 # ============================================================
-# LEFT AND RIGHT
+# LEFT + RIGHT SIDE
 # ============================================================
 
-scanner_col, chart_col = st.columns([40, 60])
+scanner_col, chart_col = st.columns(
+    [40, 60]
 )
 
 
 # ============================================================
 # LEFT SIDE — SCANNER
 # ============================================================
+
 with scanner_col:
 
     st.subheader("📊 Stock Scanner")
 
     if filtered.empty:
 
-        st.warning("No stocks match your filters.")
+        st.warning(
+            "No stocks match your filters."
+        )
 
     else:
 
-        # Header
+        # ----------------------------------------------------
+        # TABLE HEADER
+        # ----------------------------------------------------
+
         h1, h2, h3, h4, h5 = st.columns(
-            [1.3, 1.2, 1.2, 1.2, 1.2]
+            [1.2, 1.3, 1.2, 1.4, 1.2]
         )
 
         h1.write("Time")
@@ -394,33 +429,56 @@ with scanner_col:
         h4.write("% Change")
         h5.write("Rel Vol")
 
-        # Stock rows
+        # ----------------------------------------------------
+        # STOCK ROWS
+        # ----------------------------------------------------
+
         for _, row in filtered.iterrows():
 
             c1, c2, c3, c4, c5 = st.columns(
-                [1.3, 1.2, 1.2, 1.2, 1.2]
+                [1.2, 1.3, 1.2, 1.4, 1.2]
             )
 
-            c1.write(row["Time"])
+            c1.write(
+                row["Time"]
+            )
 
+            # CLICK STOCK NAME
             if c2.button(
-                row["Ticker"],
-                key=f"stock_{row['Ticker']}",
+                row["Symbol"],
+                key=f"stock_{row['Symbol']}",
                 use_container_width=True
             ):
-                st.session_state.selected_ticker = row["Ticker"]
+
+                st.session_state.selected_ticker = (
+                    row["Symbol"]
+                )
+
                 st.rerun()
 
-            c3.write(f"${row['Price']:.2f}")
+            c3.write(
+                f"${row['LTP']:.2f}"
+            )
 
-            c4.write(f"{row['Change %']:.2f}%")
+            c4.write(
+                f"{row['% Change']:.2f}%"
+            )
 
-            c5.write(f"{row['RVOL']:.2f}")
+            c5.write(
+                f"{row['Rel Vol']:.2f}"
+            )
+
+
+# ============================================================
+# RIGHT SIDE — TRADINGVIEW
+# ============================================================
+
+with chart_col:
 
     st.subheader("📈 TradingView Chart")
 
-    selected_ticker = st.session_state.get(
-        "selected_ticker"
+    selected_ticker = (
+        st.session_state.selected_ticker
     )
 
     if selected_ticker:
@@ -429,23 +487,25 @@ with scanner_col:
             f"Selected: {selected_ticker}"
         )
 
-        # TradingView direct embed
+        # URL encode the symbol
+        tv_symbol = quote(
+            f"NASDAQ:{selected_ticker}",
+            safe=""
+        )
+
         tradingview_url = (
             "https://www.tradingview.com/widgetembed/"
-            "?frameElementId=tradingview_chart"
-            "&symbol=NASDAQ%3A"
-            + selected_ticker
+            "?symbol="
+            + tv_symbol
             + "&interval=5"
-            "&hidesidetoolbar=0"
-            "&hidetoptoolbar=0"
-            "&symboledit=1"
-            "&saveimage=0"
-            "&toolbarbg=f1f3f6"
-            "&studies=[]"
-            "&theme=dark"
-            "&style=1"
-            "&timezone=America%2FNew_York"
-            "&withdateranges=1"
+            + "&hidesidetoolbar=0"
+            + "&hidetoptoolbar=0"
+            + "&symboledit=1"
+            + "&saveimage=0"
+            + "&theme=dark"
+            + "&style=1"
+            + "&timezone=America%2FNew_York"
+            + "&withdateranges=1"
         )
 
         components.html(
@@ -454,7 +514,7 @@ with scanner_col:
                 src="{tradingview_url}"
                 style="
                     width:100%;
-                    height:700px;
+                    height:600px;
                     border:0;
                 "
                 frameborder="0"
@@ -462,15 +522,16 @@ with scanner_col:
                 scrolling="no">
             </iframe>
             """,
-            height=710,
+            height=610,
             scrolling=False
         )
 
     else:
 
         st.info(
-            "Click a stock in the scanner."
+            "Click a stock name to display the chart."
         )
+
 
 # ============================================================
 # REFRESH BUTTON
