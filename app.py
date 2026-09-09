@@ -20,14 +20,50 @@ st.title("🇺🇸 US Stock Momentum Scanner")
 # STOCK UNIVERSE
 # --------------------------------------------------
 
-stocks = [
-    "AAPL", "MSFT", "NVDA", "AMD", "TSLA",
-    "AMZN", "META", "GOOGL", "NFLX", "PLTR",
-    "SOFI", "NIO", "MARA", "RIOT", "COIN",
-    "RIVN", "LCID", "SMCI", "GME", "AMC",
-    "HOOD", "MSTR", "IONQ", "PLUG", "INTC",
-    "MU", "ARM", "TQQQ", "SQQQ", "CVNA"
-]
+# --------------------------------------------------
+# AUTOMATIC US STOCK UNIVERSE
+# --------------------------------------------------
+
+@st.cache_data(ttl=300)
+def get_stock_universe():
+
+    try:
+        query = yf.EquityQuery(
+            "and",
+            [
+                yf.EquityQuery("eq", ["region", "us"]),
+                yf.EquityQuery("gte", ["intradayprice", 1]),
+                yf.EquityQuery("lte", ["intradayprice", 100]),
+                yf.EquityQuery("gte", ["dayvolume", 100000])
+            ]
+        )
+
+        response = yf.screen(
+            query,
+            size=250,
+            sortField="dayvolume",
+            sortAsc=False
+        )
+
+        quotes = response.get("quotes", [])
+
+        stocks = []
+
+        for quote in quotes:
+            symbol = quote.get("symbol")
+
+            if symbol:
+                stocks.append(symbol)
+
+        return stocks
+
+    except Exception as e:
+
+        st.warning(
+            f"Could not load automatic stock universe: {e}"
+        )
+
+        return []
 
 # --------------------------------------------------
 # SIDEBAR
@@ -341,10 +377,17 @@ if (
     or scan_button
 ):
 
-    with st.spinner("🔎 Scanning US stocks..."):
+    with st.spinner("🔎 Finding active US stocks..."):
 
-        st.session_state.scanner_data = run_scanner()
+        stocks = get_stock_universe()
 
+        if stocks:
+
+            st.session_state.scanner_data = run_scanner()
+
+        else:
+
+            st.session_state.scanner_data = pd.DataFrame()
 
 df = st.session_state.scanner_data
 
