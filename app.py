@@ -1,4 +1,3 @@
-```python
 import streamlit as st
 import yfinance as yf
 import pandas as pd
@@ -118,7 +117,7 @@ def save_settings(settings):
 
 
 # ============================================================
-# LOAD SETTINGS ONLY ON STARTUP
+# LOAD SETTINGS ON STARTUP
 # ============================================================
 
 if "settings_loaded" not in st.session_state:
@@ -153,17 +152,14 @@ if "settings_loaded" not in st.session_state:
 # ============================================================
 
 if "scanner_data" not in st.session_state:
-
     st.session_state.scanner_data = []
 
 
 if "selected_ticker" not in st.session_state:
-
     st.session_state.selected_ticker = "AAPL"
 
 
 if "last_scan_time" not in st.session_state:
-
     st.session_state.last_scan_time = None
 
 
@@ -223,7 +219,6 @@ def market_is_open():
     now = get_market_time()
 
     if now.weekday() >= 5:
-
         return False
 
     current_time = now.time()
@@ -267,7 +262,6 @@ def calculate_stock(symbol):
         )
 
         if intraday.empty:
-
             return None
 
         intraday = intraday.dropna(
@@ -278,7 +272,6 @@ def calculate_stock(symbol):
         )
 
         if intraday.empty:
-
             return None
 
         # ----------------------------------------------------
@@ -290,12 +283,10 @@ def calculate_stock(symbol):
         )
 
         session_data = intraday[
-            intraday.index.date
-            == latest_date
+            intraday.index.date == latest_date
         ].copy()
 
         if session_data.empty:
-
             return None
 
         # ----------------------------------------------------
@@ -332,7 +323,6 @@ def calculate_stock(symbol):
         )
 
         if daily.empty:
-
             return None
 
         daily = daily.dropna(
@@ -343,7 +333,6 @@ def calculate_stock(symbol):
         )
 
         if len(daily) < 6:
-
             return None
 
         # ----------------------------------------------------
@@ -425,7 +414,7 @@ def calculate_stock(symbol):
         )
 
         # ----------------------------------------------------
-        # RETURN
+        # RETURN DATA
         # ----------------------------------------------------
 
         return {
@@ -545,7 +534,7 @@ with st.sidebar:
     )
 
     # --------------------------------------------------------
-    # MIN PRICE
+    # MINIMUM PRICE
     # --------------------------------------------------------
 
     st.session_state.min_price = (
@@ -560,7 +549,7 @@ with st.sidebar:
     )
 
     # --------------------------------------------------------
-    # MAX PRICE
+    # MAXIMUM PRICE
     # --------------------------------------------------------
 
     st.session_state.max_price = (
@@ -605,7 +594,7 @@ with st.sidebar:
     )
 
     # --------------------------------------------------------
-    # MINIMUM CHANGE
+    # MINIMUM % CHANGE
     # --------------------------------------------------------
 
     st.session_state.min_change = (
@@ -622,7 +611,7 @@ with st.sidebar:
     st.markdown("---")
 
     # ========================================================
-    # SAVE FILTER SETTINGS
+    # SAVE SETTINGS
     # ========================================================
 
     if st.button(
@@ -658,7 +647,7 @@ with st.sidebar:
             )
 
     # ========================================================
-    # RESET
+    # RESET SETTINGS
     # ========================================================
 
     if st.button(
@@ -691,7 +680,7 @@ with st.sidebar:
     st.markdown("---")
 
     # ========================================================
-    # SCAN
+    # SCAN BUTTON
     # ========================================================
 
     scan_button = st.button(
@@ -846,7 +835,7 @@ with scanner_col:
         )
 
         # ----------------------------------------------------
-        # ROWS
+        # STOCK ROWS
         # ----------------------------------------------------
 
         for row in filtered:
@@ -892,12 +881,13 @@ with scanner_col:
                 f"{row['% Change']:.2f}%"
             )
 
+            # Rel Vol number only
             c5.write(
                 f"{row['Rel Vol']:.1f}"
             )
 
         # ----------------------------------------------------
-        # RESULTS
+        # MATCH COUNT
         # ----------------------------------------------------
 
         st.caption(
@@ -952,7 +942,7 @@ with chart_col:
         )
 
     # ========================================================
-    # SQUARE TRADINGVIEW CHART
+    # SQUARE TRADINGVIEW CONTAINER
     # ========================================================
 
     tradingview_html = f"""
@@ -989,6 +979,7 @@ with chart_col:
         }}
 
         .tradingview-widget-copyright {{
+            width: 100%;
             height: 32px;
             line-height: 32px;
         }}
@@ -1083,13 +1074,12 @@ with chart_col:
 
     """
 
-    # --------------------------------------------------------
-    # Streamlit iframe height
-    # --------------------------------------------------------
+    # ========================================================
+    # STREAMLIT HTML FRAME
+    # ========================================================
 
     components.html(
         tradingview_html,
         height=900,
         scrolling=False
     )
-```
