@@ -2,13 +2,14 @@ import streamlit as st
 import pandas as pd
 import yfinance as yf
 import streamlit.components.v1 as components
+import time
 from datetime import datetime
 from zoneinfo import ZoneInfo
-import time
 
-# --------------------------------------------------
-# PAGE SETTINGS
-# --------------------------------------------------
+
+# ============================================================
+# PAGE SETUP
+# ============================================================
 
 st.set_page_config(
     page_title="US Stock Momentum Scanner",
@@ -17,353 +18,205 @@ st.set_page_config(
 
 st.title("🇺🇸 US Stock Momentum Scanner")
 
-# --------------------------------------------------
-# STOCK UNIVERSE
-# --------------------------------------------------
 
-# --------------------------------------------------
-# AUTOMATIC US STOCK UNIVERSE
-# --------------------------------------------------
+# ============================================================
+# MARKET STATUS
+# ============================================================
 
-@st.cache_data(ttl=300)
-@st.cache_data(ttl=300)
-def get_stock_universe():
+def get_market_status():
 
-    stocks = [
-        "AAPL", "NVDA", "TSLA", "AMD", "AMZN",
-        "META", "MSFT", "GOOGL", "NFLX", "PLTR",
-        "MSTR", "COIN", "SMCI", "SOFI", "NIO",
-        "RIVN", "LCID", "MARA", "RIOT", "IONQ",
-        "BBAI", "SOUN", "AI", "HOOD", "RKLB",
-        "GME", "AMC", "BB", "OPEN", "FFIE"
-    ]
+    now = datetime.now(ZoneInfo("America/New_York"))
+    current_time = now.time()
 
-    return stocks
+    premarket_start = datetime.strptime("04:00", "%H:%M").time()
+    market_start = datetime.strptime("09:30", "%H:%M").time()
+    market_end = datetime.strptime("16:00", "%H:%M").time()
+    after_hours_end = datetime.strptime("20:00", "%H:%M").time()
 
-    try:
-        query = yf.EquityQuery(
-            "and",
-            [
-                yf.EquityQuery("eq", ["region", "us"]),
-                yf.EquityQuery("gte", ["intradayprice", 1]),
-                yf.EquityQuery("lte", ["intradayprice", 100]),
-                yf.EquityQuery("gte", ["dayvolume", 100000])
-            ]
-        )
+    if premarket_start <= current_time < market_start:
+        return "🟡 PRE-MARKET"
 
-        response = yf.screen(
-            query,
-            size=250,
-            sortField="dayvolume",
-            sortAsc=False
-        )
+    elif market_start <= current_time < market_end:
+        return "🟢 MARKET OPEN"
 
-        quotes = response.get("quotes", [])
+    elif market_end <= current_time < after_hours_end:
+        return "🔵 AFTER-HOURS"
 
-        stocks = []
+    return "🔴 MARKET CLOSED"
 
-        for quote in quotes:
-            symbol = quote.get("symbol")
 
-            if symbol:
-                stocks.append(symbol)
+st.write("Market status:", get_market_status())
 
-        return stocks
 
-    except Exception as e:
+# ============================================================
+# SIDEBAR FILTERS
+# ============================================================
 
-        st.warning(
-            f"Could not load automatic stock universe: {e}"
-        )
-
-        return []
-
-# --------------------------------------------------
-# SIDEBAR
-# --------------------------------------------------
-
-st.sidebar.header("⚙️ Scanner Filters")
+st.sidebar.header("Scanner Filters")
 
 min_price = st.sidebar.number_input(
-    "Minimum Price ($)",
+    "Minimum Price",
     min_value=0.01,
     value=1.00,
-    step=0.10
+    step=0.50
 )
 
 max_price = st.sidebar.number_input(
-    "Maximum Price ($)",
+    "Maximum Price",
     min_value=0.01,
     value=20.00,
-    step=0.50
+    step=1.00
 )
 
 min_volume = st.sidebar.number_input(
     "Minimum Volume",
     min_value=0,
     value=100000,
-    step=10000
+    step=50000
 )
 
 min_rvol = st.sidebar.number_input(
-    "Minimum RVOL (x)",
+    "Minimum RVOL",
     min_value=0.0,
     value=2.0,
     step=0.5
 )
 
 min_change = st.sidebar.number_input(
-    "Minimum Change (%)",
+    "Minimum Change %",
+    min_value=-100.0,
     value=2.0,
-    step=0.5
+    step=1.0
 )
 
 refresh_seconds = st.sidebar.selectbox(
-    "Auto Refresh",
+    "Refresh",
     [30, 60, 120, 300],
     index=1
 )
 
 scan_button = st.sidebar.button(
-    "🔄 Scan Now",
+    "🔍 Scan Now",
     use_container_width=True
 )
 
-# --------------------------------------------------
-# US MARKET TIME
-# --------------------------------------------------
 
-us_tz = ZoneInfo("America/New_York")
-now_us = datetime.now(us_tz)
-
-market_open = now_us.replace(
-    hour=9,
-    minute=30,
-    second=0,
-    microsecond=0
-)
-
-market_close = now_us.replace(
-    hour=16,
-    minute=0,
-    second=0,
-    microsecond=0
-)
-
-premarket_start = now_us.replace(
-    hour=4,
-    minute=0,
-    second=0,
-    microsecond=0
-)
-
-afterhours_close = now_us.replace(
-    hour=20,
-    minute=0,
-    second=0,
-    microsecond=0
-)
-
-if premarket_start <= now_us < market_open:
-    market_status = "🟡 PREMARKET"
-elif market_open <= now_us < market_close:
-    market_status = "🟢 MARKET OPEN"
-elif market_close <= now_us < afterhours_close:
-    market_status = "🔵 AFTER-HOURS"
-else:
-    market_status = "🔴 MARKET CLOSED"
-
-st.info(
-    f"US Market Status: **{market_status}**  |  "
-    f"US Time: **{now_us.strftime('%Y-%m-%d %I:%M:%S %p')}**"
-)
-
-# --------------------------------------------------
-# DOWNLOAD DATA
-# --------------------------------------------------
-
-@st.cache_data(ttl=60)
-def get_intraday_data(ticker):
-
-    try:
-
-        data = yf.download(
-            ticker,
-            period="5d",
-            interval="5m",
-            prepost=False,
-            progress=False,
-            auto_adjust=False
-        )
-
-        if data.empty:
-            return None
-
-        # Handle Yahoo multi-index columns
-        if isinstance(data.columns, pd.MultiIndex):
-            data.columns = data.columns.get_level_values(0)
-
-        data = data.dropna()
-
-        return data
-
-    except Exception:
-        return None
-
+# ============================================================
+# STOCK LIST
+# ============================================================
 
 @st.cache_data(ttl=300)
-def get_previous_close(ticker):
+def get_stock_universe():
 
-    try:
+    return [
+        "AAPL",
+        "NVDA",
+        "TSLA",
+        "AMD",
+        "AMZN",
+        "META",
+        "MSFT",
+        "GOOGL",
+        "NFLX",
+        "PLTR",
+        "MSTR",
+        "COIN",
+        "SMCI",
+        "SOFI",
+        "NIO",
+        "RIVN",
+        "LCID",
+        "MARA",
+        "RIOT",
+        "IONQ",
+        "BBAI",
+        "SOUN",
+        "AI",
+        "HOOD",
+        "RKLB",
+        "GME",
+        "AMC",
+        "BB",
+        "OPEN",
+        "FFIE"
+    ]
 
-        data = yf.download(
-            ticker,
-            period="5d",
-            interval="1d",
-            progress=False,
-            auto_adjust=False
-        )
 
-        if data.empty:
-            return None
-
-        if isinstance(data.columns, pd.MultiIndex):
-            data.columns = data.columns.get_level_values(0)
-
-        if len(data) < 2:
-            return None
-
-        return float(data["Close"].iloc[-2])
-
-    except Exception:
-        return None
-
-
-# --------------------------------------------------
-# CALCULATE RVOL
-# --------------------------------------------------
+# ============================================================
+# CALCULATE STOCK
+# ============================================================
 
 def calculate_stock(ticker):
 
-    data = get_intraday_data(ticker)
-
-    if data is None or data.empty:
-        return None
-
     try:
 
-        # Convert time to US Eastern
-        if data.index.tz is None:
-            data.index = data.index.tz_localize("UTC")
+        data = yf.Ticker(ticker).history(
+            period="5d",
+            interval="5m",
+            prepost=False
+        )
 
-        data.index = data.index.tz_convert("America/New_York")
-
-        # Date and time columns
-        data["Date"] = data.index.date
-        data["Time"] = data.index.strftime("%H:%M")
-
-        # Get trading days
-        trading_days = sorted(data["Date"].unique())
-
-        if len(trading_days) < 2:
+        if data.empty:
             return None
 
-        current_day = trading_days[-1]
+        data = data.dropna()
 
-        today = data[data["Date"] == current_day].copy()
-
-        if today.empty:
+        if len(data) < 20:
             return None
 
-        # Today's cumulative volume
-        today["CumVolume"] = today["Volume"].cumsum()
+        latest = data.iloc[-1]
 
-        latest = today.iloc[-1]
+        price = float(latest["Close"])
 
-        current_price = float(latest["Close"])
-        current_volume = int(today["Volume"].sum())
+        volume = float(latest["Volume"])
 
-        latest_time = latest["Time"]
+        previous_close = float(data["Close"].iloc[-1])
 
-        # ----------------------------------------------
-        # Historical cumulative volume at same time
-        # ----------------------------------------------
+        if previous_close == 0:
+            return None
 
-        historical_cumulative = []
+        change_percent = (
+            (price - previous_close)
+            / previous_close
+            * 100
+        )
 
-        previous_days = trading_days[:-1]
+        # Simple RVOL calculation
+        average_volume = data["Volume"].rolling(
+            20
+        ).mean().iloc[-1]
 
-        for day in previous_days:
-
-            day_data = data[data["Date"] == day].copy()
-
-            if day_data.empty:
-                continue
-
-            day_data["CumVolume"] = day_data["Volume"].cumsum()
-
-            same_time = day_data[
-                day_data["Time"] <= latest_time
-            ]
-
-            if not same_time.empty:
-
-                historical_cumulative.append(
-                    float(same_time["Volume"].sum())
-                )
-
-        if historical_cumulative:
-
-            average_volume = sum(
-                historical_cumulative
-            ) / len(historical_cumulative)
-
-            if average_volume > 0:
-                rvol = current_volume / average_volume
-            else:
-                rvol = 0
-
+        if average_volume and average_volume > 0:
+            rvol = volume / average_volume
         else:
             rvol = 0
 
-        # ----------------------------------------------
-        # Previous close / percentage change
-        # ----------------------------------------------
-
-        previous_close = get_previous_close(ticker)
-
-        if previous_close and previous_close > 0:
-
-            change_percent = (
-                (current_price - previous_close)
-                / previous_close
-            ) * 100
-
-        else:
-            change_percent = 0
-
         return {
             "Ticker": ticker,
-            "Price": current_price,
-            "Change %": change_percent,
-            "Volume": current_volume,
-            "RVOL": rvol,
-            "Time": latest_time
+            "Price": round(price, 2),
+            "Change %": round(change_percent, 2),
+            "Volume": int(volume),
+            "RVOL": round(rvol, 2),
+            "Time": data.index[-1].strftime("%H:%M")
         }
 
     except Exception:
         return None
 
 
-# --------------------------------------------------
-# SCAN MARKET
-# --------------------------------------------------
+# ============================================================
+# RUN SCANNER
+# ============================================================
 
 def run_scanner():
+
+    stocks = get_stock_universe()
 
     results = []
 
     progress = st.progress(0)
+
+    total = len(stocks)
 
     for i, ticker in enumerate(stocks):
 
@@ -373,40 +226,51 @@ def run_scanner():
             results.append(result)
 
         progress.progress(
-            int((i + 1) / len(stocks) * 100)
+            (i + 1) / total
         )
 
     progress.empty()
 
-    return pd.DataFrame(results)
+    if results:
+        return pd.DataFrame(results)
+
+    return pd.DataFrame(
+        columns=[
+            "Ticker",
+            "Price",
+            "Change %",
+            "Volume",
+            "RVOL",
+            "Time"
+        ]
+    )
 
 
-# --------------------------------------------------
-# RUN SCAN
-# --------------------------------------------------
+# ============================================================
+# RUN SCANNER
+# ============================================================
 
-if (
-    "scanner_data" not in st.session_state
-    or scan_button
-):
+if "scanner_data" not in st.session_state:
 
-    with st.spinner("🔎 Finding active US stocks..."):
-
-      stocks = get_stock_universe()
-
-if stocks:
-    st.session_state.scanner_data = run_scanner()
-else:
     st.session_state.scanner_data = pd.DataFrame()
+
+
+if scan_button or st.session_state.scanner_data.empty:
+
+    st.session_state.scanner_data = run_scanner()
+
 
 df = st.session_state.scanner_data
 
 
+# ============================================================
 # APPLY FILTERS
+# ============================================================
 
 filtered = df.copy()
 
 if not filtered.empty:
+
     filtered = filtered[
         (filtered["Price"] >= min_price) &
         (filtered["Price"] <= max_price) &
@@ -415,21 +279,24 @@ if not filtered.empty:
         (filtered["Change %"] >= min_change)
     ]
 
-# Sort by RVOL
-if not filtered.empty:
-    filtered = filtered.sort_values("RVOL", ascending=False)
+    filtered = filtered.sort_values(
+        "RVOL",
+        ascending=False
+    )
 
 
-# =========================
+# ============================================================
 # SCANNER + TRADINGVIEW
-# =========================
+# ============================================================
 
-scanner_col, chart_col = st.columns([40, 60])
+scanner_col, chart_col = st.columns(
+    [40, 60]
+)
 
 
-# -------------------------
-# LEFT SIDE - SCANNER
-# -------------------------
+# ============================================================
+# LEFT - SCANNER
+# ============================================================
 
 with scanner_col:
 
@@ -437,7 +304,13 @@ with scanner_col:
 
     if filtered.empty:
 
-        st.warning("No stocks match your filters.")
+        st.warning(
+            "No stocks match your filters."
+        )
+
+        st.info(
+            "Try lowering RVOL or Change % filters."
+        )
 
     else:
 
@@ -447,16 +320,15 @@ with scanner_col:
             hide_index=True
         )
 
-        # Select stock
         selected_ticker = st.selectbox(
-            "Select stock for chart",
+            "Select stock",
             filtered["Ticker"].tolist()
         )
 
 
-# -------------------------
-# RIGHT SIDE - TRADINGVIEW
-# -------------------------
+# ============================================================
+# RIGHT - TRADINGVIEW
+# ============================================================
 
 with chart_col:
 
@@ -465,8 +337,9 @@ with chart_col:
     if not filtered.empty:
 
         tradingview_html = f"""
-        <div id="tradingview_chart"
-             style="width:100%; height:700px;">
+        <div
+            id="tradingview_chart"
+            style="width:100%; height:700px;">
         </div>
 
         <script
@@ -485,7 +358,6 @@ with chart_col:
             "theme": "dark",
             "style": "1",
             "locale": "en",
-            "toolbar_bg": "#1e1e1e",
             "enable_publishing": false,
             "hide_top_toolbar": false,
             "hide_legend": false,
@@ -501,9 +373,24 @@ with chart_col:
             height=720
         )
 
+    else:
 
-# =========================
-# AUTO REFRESH
-# =========================
+        st.info(
+            "Select a stock from the scanner to display the chart."
+        )
 
 
+# ============================================================
+# MANUAL REFRESH
+# ============================================================
+
+st.sidebar.markdown("---")
+
+if st.sidebar.button(
+    "🔄 Refresh Scanner",
+    use_container_width=True
+):
+
+    st.session_state.scanner_data = run_scanner()
+
+    st.rerun()
