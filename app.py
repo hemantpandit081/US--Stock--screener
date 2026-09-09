@@ -27,6 +27,7 @@ st.set_page_config(
 st.markdown(
     """
     <style>
+
         .block-container {
             padding-top: 0.6rem;
             padding-bottom: 0.2rem;
@@ -53,11 +54,11 @@ st.markdown(
         }
 
         .repeat-square {
-            font-size: 17px;
+            font-size: 18px;
             font-weight: 900;
-            margin-left: 4px;
-            vertical-align: middle;
+            margin-left: 3px;
             line-height: 1;
+            vertical-align: middle;
         }
 
         .last-update {
@@ -71,6 +72,7 @@ st.markdown(
             font-weight: 700;
             margin-bottom: 2px;
         }
+
     </style>
     """,
     unsafe_allow_html=True
@@ -122,16 +124,24 @@ SETTINGS_FILE = "scanner_settings.csv"
 
 
 def save_settings(settings):
+
     df = pd.DataFrame([settings])
-    df.to_csv(SETTINGS_FILE, index=False)
+    df.to_csv(
+        SETTINGS_FILE,
+        index=False
+    )
 
 
 def load_settings():
+
     if not os.path.exists(SETTINGS_FILE):
         return DEFAULT_SETTINGS.copy()
 
     try:
-        df = pd.read_csv(SETTINGS_FILE)
+
+        df = pd.read_csv(
+            SETTINGS_FILE
+        )
 
         if df.empty:
             return DEFAULT_SETTINGS.copy()
@@ -141,27 +151,62 @@ def load_settings():
         settings = DEFAULT_SETTINGS.copy()
 
         for key in settings:
-            if key in saved and pd.notna(saved[key]):
+
+            if (
+                key in saved
+                and pd.notna(saved[key])
+            ):
                 settings[key] = saved[key]
 
-        settings["min_price"] = float(settings["min_price"])
-        settings["max_price"] = float(settings["max_price"])
-        settings["min_volume"] = int(settings["min_volume"])
-        settings["min_rvol"] = float(settings["min_rvol"])
-        settings["min_change"] = float(settings["min_change"])
-        settings["max_stocks"] = int(settings["max_stocks"])
-        settings["repeat_tolerance"] = float(settings["repeat_tolerance"])
-        settings["refresh_seconds"] = int(settings["refresh_seconds"])
-        settings["auto_scan"] = bool(settings["auto_scan"])
+        settings["min_price"] = float(
+            settings["min_price"]
+        )
+
+        settings["max_price"] = float(
+            settings["max_price"]
+        )
+
+        settings["min_volume"] = int(
+            settings["min_volume"]
+        )
+
+        settings["min_rvol"] = float(
+            settings["min_rvol"]
+        )
+
+        settings["min_change"] = float(
+            settings["min_change"]
+        )
+
+        settings["max_stocks"] = int(
+            settings["max_stocks"]
+        )
+
+        settings["repeat_tolerance"] = float(
+            settings["repeat_tolerance"]
+        )
+
+        settings["refresh_seconds"] = int(
+            settings["refresh_seconds"]
+        )
+
+        settings["auto_scan"] = bool(
+            settings["auto_scan"]
+        )
 
         return settings
 
     except Exception:
+
         return DEFAULT_SETTINGS.copy()
 
 
 if "settings_loaded" not in st.session_state:
-    st.session_state.settings = load_settings()
+
+    st.session_state.settings = (
+        load_settings()
+    )
+
     st.session_state.settings_loaded = True
 
 
@@ -170,34 +215,46 @@ if "settings_loaded" not in st.session_state:
 # ============================================================
 
 def market_is_open():
-    """
-    Regular US market:
-    Monday-Friday
-    9:30 AM - 4:00 PM Eastern Time
-    """
 
-    eastern = ZoneInfo("America/New_York")
-    now = datetime.now(eastern)
+    eastern = ZoneInfo(
+        "America/New_York"
+    )
+
+    now = datetime.now(
+        eastern
+    )
 
     if now.weekday() >= 5:
         return False
 
-    market_open = time(9, 30)
-    market_close = time(16, 0)
+    market_open = time(
+        9,
+        30
+    )
 
-    return market_open <= now.time() <= market_close
+    market_close = time(
+        16,
+        0
+    )
+
+    return (
+        market_open
+        <= now.time()
+        <= market_close
+    )
 
 
 # ============================================================
-# RUSSELL 2000
+# LOAD RUSSELL 2000
 # ============================================================
 
 @st.cache_data(ttl=3600)
 def load_russell_2000():
 
     url = (
-        "https://www.ishares.com/us/products/239710/"
-        "ishares-russell-2000-etf/latest-holdings.csv"
+        "https://www.ishares.com/us/products/"
+        "239710/ishares-russell-2000-etf/"
+        "latest-holdings.csv"
     )
 
     try:
@@ -206,7 +263,8 @@ def load_russell_2000():
             url,
             timeout=20,
             headers={
-                "User-Agent": "Mozilla/5.0"
+                "User-Agent":
+                "Mozilla/5.0"
             }
         )
 
@@ -222,14 +280,20 @@ def load_russell_2000():
         header_index = None
 
         for i, line in enumerate(lines):
-            if line.startswith("Ticker,Name"):
+
+            if line.startswith(
+                "Ticker,Name"
+            ):
+
                 header_index = i
                 break
 
         if header_index is None:
             return []
 
-        csv_text = "\n".join(lines[header_index:])
+        csv_text = "\n".join(
+            lines[header_index:]
+        )
 
         df = pd.read_csv(
             io.StringIO(csv_text)
@@ -239,6 +303,7 @@ def load_russell_2000():
             return []
 
         if "Asset Class" in df.columns:
+
             df = df[
                 df["Asset Class"]
                 .astype(str)
@@ -247,6 +312,7 @@ def load_russell_2000():
             ]
 
         if "Location" in df.columns:
+
             df = df[
                 df["Location"]
                 .astype(str)
@@ -259,51 +325,82 @@ def load_russell_2000():
 
         symbols = []
 
-        for ticker in df["Ticker"].astype(str):
+        for ticker in (
+            df["Ticker"]
+            .astype(str)
+        ):
 
-            ticker = ticker.strip().upper()
+            ticker = (
+                ticker
+                .strip()
+                .upper()
+            )
 
             if not ticker:
                 continue
 
-            if ticker in ["CASH", ""]:
+            if ticker == "CASH":
                 continue
 
-            # Yahoo Finance uses "-" instead of ".".
-            ticker = ticker.replace(".", "-")
+            ticker = ticker.replace(
+                ".",
+                "-"
+            )
 
-            symbols.append(ticker)
+            symbols.append(
+                ticker
+            )
 
-        # Remove duplicates while preserving order
-        symbols = list(dict.fromkeys(symbols))
+        symbols = list(
+            dict.fromkeys(
+                symbols
+            )
+        )
 
         return symbols
 
     except Exception as e:
+
         st.error(
             f"Unable to load Russell 2000 holdings: {e}"
         )
+
         return []
 
 
 # ============================================================
-# YFINANCE DATA HELPERS
+# YFINANCE DATA HELPER
 # ============================================================
 
-def get_symbol_data(data, symbol):
+def get_symbol_data(
+    data,
+    symbol
+):
 
     try:
 
-        if data is None or data.empty:
+        if (
+            data is None
+            or data.empty
+        ):
             return None
 
-        if isinstance(data.columns, pd.MultiIndex):
+        if isinstance(
+            data.columns,
+            pd.MultiIndex
+        ):
 
-            if symbol in data.columns.get_level_values(0):
+            if (
+                symbol
+                in data.columns
+                .get_level_values(0)
+            ):
+
                 return data[symbol]
 
-            # Sometimes ticker can appear in another level
-            for level in range(data.columns.nlevels):
+            for level in range(
+                data.columns.nlevels
+            ):
 
                 values = (
                     data.columns
@@ -314,13 +411,13 @@ def get_symbol_data(data, symbol):
                 if symbol in values:
 
                     try:
-                        result = data.xs(
+
+                        return data.xs(
                             symbol,
                             level=level,
                             axis=1
                         )
 
-                        return result
                     except Exception:
                         pass
 
@@ -329,6 +426,7 @@ def get_symbol_data(data, symbol):
         return data
 
     except Exception:
+
         return None
 
 
@@ -341,7 +439,10 @@ def detect_repeat(
     tolerance=0.90
 ):
 
-    if session_data is None or session_data.empty:
+    if (
+        session_data is None
+        or session_data.empty
+    ):
         return False, 0, 0
 
     if "Volume" not in session_data.columns:
@@ -363,7 +464,9 @@ def detect_repeat(
         volumes.iloc[-1]
     )
 
-    previous_volumes = volumes.iloc[:-1]
+    previous_volumes = (
+        volumes.iloc[:-1]
+    )
 
     if previous_volumes.empty:
         return False, current_volume, 0
@@ -376,11 +479,13 @@ def detect_repeat(
         return False, current_volume, 0
 
     repeat_level = (
-        previous_highest * tolerance
+        previous_highest
+        * tolerance
     )
 
     repeat = (
-        current_volume >= repeat_level
+        current_volume
+        >= repeat_level
     )
 
     return (
@@ -391,7 +496,7 @@ def detect_repeat(
 
 
 # ============================================================
-# SCAN ONE BATCH
+# SCAN BATCH
 # ============================================================
 
 def scan_batch(symbols):
@@ -402,10 +507,6 @@ def scan_batch(symbols):
         return pd.DataFrame()
 
     try:
-
-        # ----------------------------------------------------
-        # 1-MINUTE DATA
-        # ----------------------------------------------------
 
         intraday = yf.download(
             tickers=symbols,
@@ -419,13 +520,10 @@ def scan_batch(symbols):
         )
 
     except Exception:
+
         intraday = pd.DataFrame()
 
     try:
-
-        # ----------------------------------------------------
-        # DAILY DATA
-        # ----------------------------------------------------
 
         daily = yf.download(
             tickers=symbols,
@@ -439,20 +537,23 @@ def scan_batch(symbols):
         )
 
     except Exception:
+
         daily = pd.DataFrame()
 
 
     # ========================================================
-    # PROCESS EACH STOCK
+    # PROCESS STOCKS
     # ========================================================
 
     for symbol in symbols:
 
         try:
 
-            intraday_symbol = get_symbol_data(
-                intraday,
-                symbol
+            intraday_symbol = (
+                get_symbol_data(
+                    intraday,
+                    symbol
+                )
             )
 
             if (
@@ -461,9 +562,12 @@ def scan_batch(symbols):
             ):
                 continue
 
-            intraday_symbol = intraday_symbol.dropna(
-                subset=["Close"],
-                how="all"
+            intraday_symbol = (
+                intraday_symbol
+                .dropna(
+                    subset=["Close"],
+                    how="all"
+                )
             )
 
             if intraday_symbol.empty:
@@ -471,7 +575,7 @@ def scan_batch(symbols):
 
 
             # ------------------------------------------------
-            # LATEST PRICE
+            # LTP
             # ------------------------------------------------
 
             latest_close = pd.to_numeric(
@@ -521,9 +625,11 @@ def scan_batch(symbols):
 
             previous_close = None
 
-            daily_symbol = get_symbol_data(
-                daily,
-                symbol
+            daily_symbol = (
+                get_symbol_data(
+                    daily,
+                    symbol
+                )
             )
 
             if (
@@ -537,13 +643,14 @@ def scan_batch(symbols):
                 ).dropna()
 
                 if len(closes) >= 2:
+
                     previous_close = float(
                         closes.iloc[-2]
                     )
 
 
             # ------------------------------------------------
-            # PERCENT CHANGE
+            # % CHANGE
             # ------------------------------------------------
 
             if (
@@ -552,12 +659,16 @@ def scan_batch(symbols):
             ):
 
                 percent_change = (
-                    (ltp - previous_close)
+                    (
+                        ltp
+                        - previous_close
+                    )
                     / previous_close
                     * 100
                 )
 
             else:
+
                 percent_change = 0.0
 
 
@@ -580,7 +691,8 @@ def scan_batch(symbols):
                 if len(daily_volume) >= 6:
 
                     previous_daily_volume = (
-                        daily_volume.iloc[:-1]
+                        daily_volume
+                        .iloc[:-1]
                         .tail(5)
                     )
 
@@ -598,6 +710,7 @@ def scan_batch(symbols):
                             / avg_previous_volume
                         )
 
+
             # ------------------------------------------------
             # FILTERS
             # ------------------------------------------------
@@ -606,19 +719,34 @@ def scan_batch(symbols):
                 st.session_state.settings
             )
 
-            if ltp < settings["min_price"]:
+            if (
+                ltp
+                < settings["min_price"]
+            ):
                 continue
 
-            if ltp > settings["max_price"]:
+            if (
+                ltp
+                > settings["max_price"]
+            ):
                 continue
 
-            if session_volume < settings["min_volume"]:
+            if (
+                session_volume
+                < settings["min_volume"]
+            ):
                 continue
 
-            if relative_volume < settings["min_rvol"]:
+            if (
+                relative_volume
+                < settings["min_rvol"]
+            ):
                 continue
 
-            if percent_change < settings["min_change"]:
+            if (
+                percent_change
+                < settings["min_change"]
+            ):
                 continue
 
 
@@ -627,6 +755,7 @@ def scan_batch(symbols):
             # ------------------------------------------------
 
             try:
+
                 last_timestamp = (
                     intraday_symbol.index[-1]
                 )
@@ -635,42 +764,73 @@ def scan_batch(symbols):
                     last_timestamp,
                     "strftime"
                 ):
+
                     display_time = (
                         last_timestamp
                         .strftime("%H:%M")
                     )
+
                 else:
+
                     display_time = ""
 
             except Exception:
+
                 display_time = ""
 
 
+            # ------------------------------------------------
+            # RESULT
+            # ------------------------------------------------
+
             results.append(
                 {
-                    "Time": display_time,
-                    "Symbol": symbol,
-                    "LTP": ltp,
-                    "% Change": percent_change,
-                    "Rel Vol": relative_volume,
-                    "Repeat": repeat,
-                    "Current 1m Volume": current_1m_volume,
-                    "Previous Spike": previous_spike,
-                    "Session Volume": session_volume,
+                    "Time":
+                        display_time,
+
+                    "Symbol":
+                        symbol,
+
+                    "LTP":
+                        ltp,
+
+                    "% Change":
+                        percent_change,
+
+                    "Rel Vol":
+                        relative_volume,
+
+                    "Repeat":
+                        repeat,
+
+                    "Current 1m Volume":
+                        current_1m_volume,
+
+                    "Previous Spike":
+                        previous_spike,
+
+                    "Session Volume":
+                        session_volume,
                 }
             )
 
         except Exception:
+
             continue
 
 
     if not results:
         return pd.DataFrame()
 
-    result_df = pd.DataFrame(results)
+    result_df = pd.DataFrame(
+        results
+    )
 
     result_df = result_df.sort_values(
-        by=["% Change", "Rel Vol"],
+        by=[
+            "% Change",
+            "Rel Vol"
+        ],
         ascending=False
     )
 
@@ -685,7 +845,9 @@ def scan_batch(symbols):
 
 def run_scanner():
 
-    symbols = load_russell_2000()
+    symbols = (
+        load_russell_2000()
+    )
 
     if not symbols:
         return pd.DataFrame()
@@ -696,12 +858,11 @@ def run_scanner():
         ]
     )
 
-    symbols = symbols[:max_stocks]
+    symbols = symbols[
+        :max_stocks
+    ]
 
     all_results = []
-
-    # Scan in smaller groups to reduce
-    # Yahoo Finance request problems.
 
     batch_size = 50
 
@@ -715,13 +876,18 @@ def run_scanner():
             start:start + batch_size
         ]
 
-        result = scan_batch(batch)
+        result = scan_batch(
+            batch
+        )
 
         if (
             result is not None
             and not result.empty
         ):
-            all_results.append(result)
+
+            all_results.append(
+                result
+            )
 
     if not all_results:
         return pd.DataFrame()
@@ -732,7 +898,10 @@ def run_scanner():
     )
 
     final_df = final_df.sort_values(
-        by=["% Change", "Rel Vol"],
+        by=[
+            "% Change",
+            "Rel Vol"
+        ],
         ascending=False
     )
 
@@ -742,20 +911,23 @@ def run_scanner():
 
 
 # ============================================================
-# TRADINGVIEW
+# TRADINGVIEW CHART
 # ============================================================
 
-def tradingview_chart(symbol):
+def tradingview_chart(
+    symbol
+):
 
     html = f"""
     <div style="
         width:100%;
         height:560px;
         overflow:hidden;
+        position:relative;
     ">
 
         <iframe
-            src="https://www.tradingview.com/widgetembed/?frameElementId=tradingview_chart&symbol=NASDAQ%3A{symbol}&interval=1&hidesidetoolbar=0&symboledit=1&saveimage=0&toolbarbg=f1f3f6&studies=%5B%5D&hideideas=1&theme=dark&style=1&timezone=exchange&withdateranges=1&hidevolume=0&allow_symbol_change=1"
+            src="https://www.tradingview.com/widgetembed/?frameElementId=tradingview_chart&symbol=NASDAQ%3A{symbol}&interval=1&hidesidetoolbar=0&symboledit=1&saveimage=1&toolbarbg=f1f3f6&studies=%5B%5D&hideideas=1&theme=dark&style=1&timezone=exchange&withdateranges=1&hidevolume=0&allow_symbol_change=1&details=1&hotlist=1&calendar=1"
             style="
                 width:100%;
                 height:100%;
@@ -763,6 +935,7 @@ def tradingview_chart(symbol):
             "
             allowtransparency="true"
             frameborder="0"
+            allowfullscreen
         >
         </iframe>
 
@@ -794,24 +967,30 @@ with st.sidebar:
         )
     )
 
+    refresh_options = [
+        30,
+        60,
+        90,
+        120,
+        180,
+        300
+    ]
+
+    current_refresh = int(
+        st.session_state.settings[
+            "refresh_seconds"
+        ]
+    )
+
+    if current_refresh not in refresh_options:
+        current_refresh = 60
+
     refresh_seconds = st.selectbox(
         "Refresh interval",
-        [30, 60, 90, 120, 180, 300],
-        index=[
-            30, 60, 90, 120, 180, 300
-        ].index(
-            int(
-                st.session_state.settings[
-                    "refresh_seconds"
-                ]
-            )
+        refresh_options,
+        index=refresh_options.index(
+            current_refresh
         )
-        if int(
-            st.session_state.settings[
-                "refresh_seconds"
-            ]
-        ) in [30, 60, 90, 120, 180, 300]
-        else 1
     )
 
     max_stocks = st.number_input(
@@ -904,7 +1083,8 @@ with st.sidebar:
                 st.session_state.settings[
                     "repeat_tolerance"
                 ]
-            ) * 100
+            )
+            * 100
         ),
         step=5
     )
@@ -917,19 +1097,33 @@ with st.sidebar:
     ):
 
         st.session_state.settings = {
-            "min_price": float(min_price),
-            "max_price": float(max_price),
-            "min_volume": int(min_volume),
-            "min_rvol": float(min_rvol),
-            "min_change": float(min_change),
-            "max_stocks": int(max_stocks),
-            "repeat_tolerance": (
-                float(repeat_percent) / 100
-            ),
-            "refresh_seconds": int(
-                refresh_seconds
-            ),
-            "auto_scan": bool(auto_scan),
+            "min_price":
+                float(min_price),
+
+            "max_price":
+                float(max_price),
+
+            "min_volume":
+                int(min_volume),
+
+            "min_rvol":
+                float(min_rvol),
+
+            "min_change":
+                float(min_change),
+
+            "max_stocks":
+                int(max_stocks),
+
+            "repeat_tolerance":
+                float(repeat_percent)
+                / 100,
+
+            "refresh_seconds":
+                int(refresh_seconds),
+
+            "auto_scan":
+                bool(auto_scan),
         }
 
         save_settings(
@@ -947,11 +1141,13 @@ with st.sidebar:
 
         st.session_state.settings[
             "auto_scan"
-        ] = bool(auto_scan)
+        ]["auto_scan"] = bool(auto_scan)
 
         st.session_state.settings[
             "refresh_seconds"
-        ] = int(refresh_seconds)
+        ] = int(
+            refresh_seconds
+        )
 
         st.session_state.manual_scan_requested = True
 
@@ -959,7 +1155,7 @@ with st.sidebar:
 
 
 # ============================================================
-# KEEP CURRENT SIDEBAR VALUES
+# CURRENT SETTINGS
 # ============================================================
 
 st.session_state.settings[
@@ -968,7 +1164,9 @@ st.session_state.settings[
 
 st.session_state.settings[
     "refresh_seconds"
-] = int(refresh_seconds)
+] = int(
+    refresh_seconds
+)
 
 
 # ============================================================
@@ -976,7 +1174,11 @@ st.session_state.settings[
 # ============================================================
 
 st.markdown(
-    '<div class="scanner-title">US Stock Momentum Scanner</div>',
+    """
+    <div class="scanner-title">
+        US Stock Momentum Scanner
+    </div>
+    """,
     unsafe_allow_html=True
 )
 
@@ -988,8 +1190,7 @@ st.markdown(
 if market_is_open():
 
     st.markdown(
-        "🟢 **US Market Open**",
-        unsafe_allow_html=True
+        "🟢 **US Market Open**"
     )
 
 else:
@@ -1000,7 +1201,7 @@ else:
 
 
 # ============================================================
-# LAYOUT
+# MAIN LAYOUT
 # ============================================================
 
 scanner_col, chart_col = st.columns(
@@ -1015,7 +1216,9 @@ scanner_col, chart_col = st.columns(
 run_every = None
 
 if (
-    st.session_state.settings["auto_scan"]
+    st.session_state.settings[
+        "auto_scan"
+    ]
     and market_is_open()
 ):
 
@@ -1024,12 +1227,14 @@ if (
     )
 
 
-@st.fragment(run_every=run_every)
+@st.fragment(
+    run_every=run_every
+)
 def automatic_scanner():
 
-    # --------------------------------------------------------
+    # ========================================================
     # RUN SCAN
-    # --------------------------------------------------------
+    # ========================================================
 
     should_scan = False
 
@@ -1038,12 +1243,23 @@ def automatic_scanner():
         if (
             st.session_state.scanner_data.empty
         ):
+
             should_scan = True
 
         elif (
             st.session_state.manual_scan_requested
         ):
+
             should_scan = True
+
+        elif (
+            st.session_state.settings[
+                "auto_scan"
+            ]
+        ):
+
+            should_scan = True
+
 
     if should_scan:
 
@@ -1068,10 +1284,6 @@ def automatic_scanner():
 
     with scanner_col:
 
-        # ----------------------------------------------------
-        # UPDATE TIME
-        # ----------------------------------------------------
-
         if (
             st.session_state.last_scan_time
             is not None
@@ -1079,13 +1291,18 @@ def automatic_scanner():
 
             update_text = (
                 "Updated: "
-                + st.session_state.last_scan_time.strftime(
+                +
+                st.session_state.last_scan_time.strftime(
                     "%H:%M:%S"
                 )
             )
 
             st.markdown(
-                f'<div class="last-update">{update_text}</div>',
+                f"""
+                <div class="last-update">
+                    {update_text}
+                </div>
+                """,
                 unsafe_allow_html=True
             )
 
@@ -1103,19 +1320,31 @@ def automatic_scanner():
         ]
 
         header_cols = st.columns(
-            [0.8, 1.45, 1.0, 1.0, 1.0]
+            [
+                0.8,
+                1.45,
+                1.0,
+                1.0,
+                1.0
+            ]
         )
 
-        for i, header in enumerate(headers):
+        for i, header in enumerate(
+            headers
+        ):
 
             header_cols[i].markdown(
-                f'<div class="scanner-header">{header}</div>',
+                f"""
+                <div class="scanner-header">
+                    {header}
+                </div>
+                """,
                 unsafe_allow_html=True
             )
 
 
         # ----------------------------------------------------
-        # DATA
+        # SCANNER DATA
         # ----------------------------------------------------
 
         data = (
@@ -1133,7 +1362,13 @@ def automatic_scanner():
             for _, row in data.iterrows():
 
                 row_cols = st.columns(
-                    [0.8, 1.45, 1.0, 1.0, 1.0]
+                    [
+                        0.8,
+                        1.45,
+                        1.0,
+                        1.0,
+                        1.0
+                    ]
                 )
 
 
@@ -1147,7 +1382,7 @@ def automatic_scanner():
 
 
                 # --------------------------------------------
-                # SYMBOL + BIG BOLD SOLID SQUARE
+                # SYMBOL + SOLID SQUARE
                 # --------------------------------------------
 
                 symbol_container = (
@@ -1156,12 +1391,18 @@ def automatic_scanner():
 
                 symbol_inner = (
                     symbol_container.columns(
-                        [1.0, 0.20]
+                        [
+                            1.0,
+                            0.25
+                        ]
                     )
                 )
 
 
-                # Ticker button
+                # --------------------------------------------
+                # TICKER
+                # --------------------------------------------
+
                 if symbol_inner[0].button(
                     row["Symbol"],
                     key=(
@@ -1180,10 +1421,12 @@ def automatic_scanner():
 
 
                 # --------------------------------------------
-                # REPEAT SIGNAL
+                # REPEAT SQUARE
                 # --------------------------------------------
 
-                if bool(row["Repeat"]):
+                if bool(
+                    row["Repeat"]
+                ):
 
                     symbol_inner[1].markdown(
                         """
@@ -1208,7 +1451,7 @@ def automatic_scanner():
 
 
                 # --------------------------------------------
-                # PERCENT CHANGE
+                # % CHANGE
                 # --------------------------------------------
 
                 row_cols[3].write(
@@ -1217,7 +1460,7 @@ def automatic_scanner():
 
 
                 # --------------------------------------------
-                # RELATIVE VOLUME
+                # REL VOL
                 # --------------------------------------------
 
                 row_cols[4].write(
@@ -1245,7 +1488,7 @@ def automatic_scanner():
 
 
 # ============================================================
-# START SCANNER
+# START
 # ============================================================
 
 automatic_scanner()
