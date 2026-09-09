@@ -4,13 +4,11 @@ import pandas as pd
 from datetime import datetime
 from zoneinfo import ZoneInfo
 import streamlit.components.v1 as components
-import html
 
 
-# ============================================================
+# =========================================================
 # PAGE CONFIG
-# ============================================================
-
+# =========================================================
 st.set_page_config(
     page_title="US Stock Momentum Scanner",
     layout="wide",
@@ -18,70 +16,76 @@ st.set_page_config(
 )
 
 
-# ============================================================
-# COMPACT SCREEN-FIT CSS
-# ============================================================
-
+# =========================================================
+# COMPACT SCREEN LAYOUT
+# =========================================================
 st.markdown(
     """
     <style>
 
-    /* Remove Streamlit page spacing */
+    /* Remove unnecessary page space */
     .block-container {
-        padding-top: 0.25rem;
-        padding-bottom: 0rem;
-        padding-left: 0.5rem;
-        padding-right: 0.5rem;
-        max-width: 100%;
+        padding-top: 0.05rem !important;
+        padding-bottom: 0rem !important;
+        padding-left: 0.35rem !important;
+        padding-right: 0.35rem !important;
+        max-width: 100% !important;
     }
 
-    /* Compact title */
+    /* Compact headings */
     h1 {
-        font-size: 1.35rem !important;
-        margin-top: 0rem !important;
-        margin-bottom: 0.05rem !important;
+        font-size: 1.15rem !important;
+        margin: 0rem !important;
+        padding: 0rem !important;
     }
 
     h2 {
-        font-size: 1.05rem !important;
-        margin-top: 0rem !important;
-        margin-bottom: 0.05rem !important;
+        font-size: 0.95rem !important;
+        margin: 0rem !important;
+        padding: 0rem !important;
     }
 
     h3 {
-        font-size: 0.95rem !important;
-        margin-top: 0rem !important;
-        margin-bottom: 0.05rem !important;
+        font-size: 0.85rem !important;
+        margin: 0rem !important;
+        padding: 0rem !important;
     }
 
-    /* Reduce gaps between columns */
+    /* Reduce vertical gaps */
+    div[data-testid="stVerticalBlock"] {
+        gap: 0.05rem !important;
+    }
+
     div[data-testid="stHorizontalBlock"] {
-        gap: 0.3rem;
+        gap: 0.2rem !important;
     }
 
     /* Compact buttons */
     div[data-testid="stButton"] button {
         width: 100%;
-        min-height: 25px;
-        height: 25px;
-        padding: 0px 2px;
-        font-size: 0.76rem;
+        min-height: 23px !important;
+        height: 23px !important;
+        padding: 0px 2px !important;
+        font-size: 0.72rem !important;
+        line-height: 1 !important;
     }
 
     /* Compact text */
     div[data-testid="stMarkdownContainer"] p {
-        margin-bottom: 0.05rem;
+        margin: 0rem !important;
+        padding: 0rem !important;
+        font-size: 0.75rem !important;
     }
 
     /* Compact alerts */
     div[data-testid="stAlert"] {
-        padding: 0.25rem 0.5rem;
-        margin-bottom: 0.15rem;
+        padding: 0.15rem 0.4rem !important;
+        margin: 0rem !important;
     }
 
-    /* Remove unnecessary vertical spacing */
-    div[data-testid="stVerticalBlock"] {
-        gap: 0.2rem;
+    /* Reduce dataframe/container spacing */
+    div[data-testid="stVerticalBlockBorderWrapper"] {
+        padding: 0rem !important;
     }
 
     </style>
@@ -90,62 +94,60 @@ st.markdown(
 )
 
 
-# ============================================================
-# TITLE
-# ============================================================
+# =========================================================
+# DASHBOARD HEIGHT
+# =========================================================
+# Reduced so the whole dashboard fits on a normal laptop
+DASHBOARD_HEIGHT = 500
 
-st.title("US Stock Momentum Scanner")
 
-
-# ============================================================
+# =========================================================
 # MARKET STATUS
-# ============================================================
-
-ny_time = datetime.now(
-    ZoneInfo("America/New_York")
-)
+# =========================================================
+ny_time = datetime.now(ZoneInfo("America/New_York"))
 
 market_open = (
     ny_time.weekday() < 5
     and (
         ny_time.hour > 9
-        or (
-            ny_time.hour == 9
-            and ny_time.minute >= 30
-        )
+        or (ny_time.hour == 9 and ny_time.minute >= 30)
     )
-    and (
-        ny_time.hour < 16
-        or (
-            ny_time.hour == 16
-            and ny_time.minute == 0
-        )
-    )
+    and ny_time.hour < 16
 )
 
 if market_open:
-    st.success(
-        f"Market OPEN | "
-        f"{ny_time.strftime('%I:%M:%S %p')} New York"
-    )
+    market_status = "🟢 MARKET OPEN"
 else:
-    st.info(
-        f"Market CLOSED | "
-        f"{ny_time.strftime('%I:%M:%S %p')} New York"
+    market_status = "🔴 MARKET CLOSED"
+
+
+# =========================================================
+# HEADER
+# =========================================================
+header_col1, header_col2 = st.columns([4, 1])
+
+with header_col1:
+    st.markdown(
+        "### 🚀 US Stock Momentum Scanner"
+    )
+
+with header_col2:
+    st.markdown(
+        f"<div style='text-align:right;font-size:0.8rem;padding-top:5px;'>{market_status}</div>",
+        unsafe_allow_html=True
     )
 
 
-# ============================================================
+# =========================================================
 # SIDEBAR FILTERS
-# ============================================================
-
+# =========================================================
 st.sidebar.header("Scanner Filters")
 
 min_price = st.sidebar.number_input(
     "Minimum Price",
     min_value=0.0,
     value=1.0,
-    step=0.50
+    step=0.5
 )
 
 max_price = st.sidebar.number_input(
@@ -159,7 +161,7 @@ min_volume = st.sidebar.number_input(
     "Minimum Volume",
     min_value=0,
     value=100000,
-    step=50000
+    step=10000
 )
 
 min_rvol = st.sidebar.number_input(
@@ -177,16 +179,15 @@ min_change = st.sidebar.number_input(
 )
 
 scan_button = st.sidebar.button(
-    "SCAN NOW",
+    "🔎 Scan Now",
     use_container_width=True
 )
 
 
-# ============================================================
+# =========================================================
 # STOCK UNIVERSE
-# ============================================================
-
-STOCK_UNIVERSE = [
+# =========================================================
+stock_universe = [
     "AAPL",
     "NVDA",
     "TSLA",
@@ -216,35 +217,20 @@ STOCK_UNIVERSE = [
     "AMC",
     "BB",
     "OPEN",
-    "FFIE",
+    "FFIE"
 ]
 
 
-# ============================================================
-# SESSION STATE
-# ============================================================
-
-if "scanner_data" not in st.session_state:
-    st.session_state.scanner_data = pd.DataFrame()
-
-if "selected_ticker" not in st.session_state:
-    st.session_state.selected_ticker = "AAPL"
-
-
-# ============================================================
+# =========================================================
 # CALCULATE STOCK
-# ============================================================
-
+# =========================================================
 def calculate_stock(symbol):
 
     try:
 
         ticker = yf.Ticker(symbol)
 
-        # ----------------------------------------------------
-        # INTRADAY DATA
-        # ----------------------------------------------------
-
+        # Intraday data
         intraday = ticker.history(
             period="5d",
             interval="5m",
@@ -252,159 +238,94 @@ def calculate_stock(symbol):
             auto_adjust=False
         )
 
-        if intraday.empty:
-            return None
-
-        # ----------------------------------------------------
-        # DAILY DATA
-        # ----------------------------------------------------
-
+        # Daily data
         daily = ticker.history(
             period="20d",
             interval="1d",
             auto_adjust=False
         )
 
-        if daily.empty:
+        if intraday.empty or daily.empty:
             return None
 
-        intraday = intraday.copy()
+        intraday = intraday.dropna(subset=["Close", "Volume"])
+        daily = daily.dropna(subset=["Close", "Volume"])
 
+        if len(daily) < 6:
+            return None
+
+        # Latest price
+        ltp = float(intraday["Close"].iloc[-1])
+
+        # Latest trading session
         latest_date = intraday.index[-1].date()
 
-        today_data = intraday[
+        session_data = intraday[
             intraday.index.date == latest_date
-        ].copy()
+        ]
 
-        if today_data.empty:
+        if session_data.empty:
             return None
 
-        # ----------------------------------------------------
-        # LTP
-        # ----------------------------------------------------
-
-        ltp = float(
-            today_data["Close"].iloc[-1]
-        )
-
-        # ----------------------------------------------------
-        # SESSION VOLUME
-        # ----------------------------------------------------
-
+        # Total session volume
         session_volume = float(
-            today_data["Volume"].sum()
+            session_data["Volume"].sum()
         )
 
-        # ----------------------------------------------------
-        # PREVIOUS CLOSE
-        # ----------------------------------------------------
+        # Previous close
+        previous_close = float(
+            daily["Close"].iloc[-2]
+        )
 
-        if len(daily) >= 2:
+        # Percentage change
+        change_pct = (
+            (ltp - previous_close)
+            / previous_close
+        ) * 100
 
-            previous_close = float(
-                daily["Close"].iloc[-2]
-            )
+        # Average previous 5 daily volumes
+        previous_volumes = daily["Volume"].iloc[-6:-1]
 
-        else:
+        average_daily_volume = float(
+            previous_volumes.mean()
+        )
 
-            previous_close = float(
-                daily["Close"].iloc[-1]
-            )
+        if average_daily_volume <= 0:
+            return None
 
-        # ----------------------------------------------------
-        # % CHANGE
-        # ----------------------------------------------------
+        # Relative volume
+        rel_volume = (
+            session_volume
+            / average_daily_volume
+        )
 
-        if previous_close > 0:
-
-            change_pct = (
-                (ltp - previous_close)
-                / previous_close
-                * 100
-            )
-
-        else:
-
-            change_pct = 0
-
-        # ----------------------------------------------------
-        # AVERAGE VOLUME
-        # ----------------------------------------------------
-
-        if len(daily) >= 6:
-
-            previous_volumes = (
-                daily["Volume"].iloc[-6:-1]
-            )
-
-        else:
-
-            previous_volumes = (
-                daily["Volume"].iloc[:-1]
-            )
-
-        if not previous_volumes.empty:
-
-            avg_volume = float(
-                previous_volumes.mean()
-            )
-
-        else:
-
-            avg_volume = 0
-
-        # ----------------------------------------------------
-        # RELATIVE VOLUME
-        # ----------------------------------------------------
-
-        if avg_volume > 0:
-
-            rvol = (
-                session_volume
-                / avg_volume
-            )
-
-        else:
-
-            rvol = 0
-
-        # ----------------------------------------------------
-        # TIME
-        # ----------------------------------------------------
-
-        current_time = datetime.now(
-            ZoneInfo("America/New_York")
-        ).strftime("%H:%M")
+        current_time = datetime.now().strftime("%H:%M:%S")
 
         return {
             "Time": current_time,
             "Symbol": symbol,
             "LTP": ltp,
             "% Change": change_pct,
-            "Rel Vol": rvol,
+            "Rel Vol": rel_volume,
             "Volume": session_volume
         }
 
     except Exception:
-
         return None
 
 
-# ============================================================
+# =========================================================
 # RUN SCANNER
-# ============================================================
-
+# =========================================================
 def run_scanner():
 
     results = []
 
     progress = st.progress(0)
 
-    total = len(STOCK_UNIVERSE)
+    total = len(stock_universe)
 
-    for i, symbol in enumerate(
-        STOCK_UNIVERSE
-    ):
+    for i, symbol in enumerate(stock_universe):
 
         result = calculate_stock(symbol)
 
@@ -412,109 +333,105 @@ def run_scanner():
             results.append(result)
 
         progress.progress(
-            int(
-                ((i + 1) / total) * 100
-            )
+            (i + 1) / total
         )
 
     progress.empty()
 
-    if results:
+    if not results:
+        return pd.DataFrame()
 
-        return pd.DataFrame(results)
-
-    return pd.DataFrame()
+    return pd.DataFrame(results)
 
 
-# ============================================================
+# =========================================================
+# SESSION STATE
+# =========================================================
+if "scanner_data" not in st.session_state:
+    st.session_state.scanner_data = pd.DataFrame()
+
+if "selected_ticker" not in st.session_state:
+    st.session_state.selected_ticker = "AAPL"
+
+
+# =========================================================
 # INITIAL SCAN
-# ============================================================
-
+# =========================================================
 if (
     scan_button
     or st.session_state.scanner_data.empty
 ):
 
-    with st.spinner(
-        "Scanning US stocks..."
-    ):
-
-        st.session_state.scanner_data = (
-            run_scanner()
-        )
+    st.session_state.scanner_data = run_scanner()
 
 
-# ============================================================
-# MAIN LAYOUT
-# ============================================================
+# =========================================================
+# FILTER RESULTS
+# =========================================================
+data = st.session_state.scanner_data.copy()
 
+if not data.empty:
+
+    filtered = data[
+        (data["LTP"] >= min_price)
+        & (data["LTP"] <= max_price)
+        & (data["Volume"] >= min_volume)
+        & (data["Rel Vol"] >= min_rvol)
+        & (data["% Change"] >= min_change)
+    ].copy()
+
+    # Highest RVOL first
+    filtered = filtered.sort_values(
+        by="Rel Vol",
+        ascending=False
+    )
+
+else:
+
+    filtered = pd.DataFrame()
+
+
+# =========================================================
+# MAIN DASHBOARD
+# =========================================================
 scanner_col, chart_col = st.columns(
     [40, 60],
     gap="small"
 )
 
 
-# ============================================================
-# LEFT - SCANNER
-# ============================================================
-
+# =========================================================
+# LEFT — SCANNER
+# =========================================================
 with scanner_col:
 
-    st.subheader("Momentum Scanner")
+    st.markdown("**📊 Scanner**")
 
-    df = st.session_state.scanner_data.copy()
+    # Column headers
+    h1, h2, h3, h4, h5 = st.columns(
+        [1.1, 1.3, 1.15, 1.25, 1.1]
+    )
 
-    if not df.empty:
+    h1.markdown("**Time**")
+    h2.markdown("**Symbol**")
+    h3.markdown("**LTP**")
+    h4.markdown("**% Change**")
+    h5.markdown("**Rel Vol**")
 
-        # ----------------------------------------------------
-        # FILTER
-        # ----------------------------------------------------
+    st.markdown("---")
 
-        filtered = df[
-            (df["LTP"] >= min_price)
-            & (df["LTP"] <= max_price)
-            & (df["Volume"] >= min_volume)
-            & (df["Rel Vol"] >= min_rvol)
-            & (df["% Change"] >= min_change)
-        ].copy()
+    with st.container(
+        height=DASHBOARD_HEIGHT - 45,
+        border=False
+    ):
 
-        # ----------------------------------------------------
-        # SORT
-        # ----------------------------------------------------
+        if filtered.empty:
 
-        filtered = filtered.sort_values(
-            "Rel Vol",
-            ascending=False
-        )
+            st.info(
+                "No stocks match the current filters."
+            )
 
-        st.caption(
-            f"{len(filtered)} stocks matched"
-        )
-
-        # ----------------------------------------------------
-        # HEADER
-        # ----------------------------------------------------
-
-        h1, h2, h3, h4, h5 = st.columns(
-            [1.1, 1.3, 1.15, 1.25, 1.1]
-        )
-
-        h1.markdown("**Time**")
-        h2.markdown("**Symbol**")
-        h3.markdown("**LTP**")
-        h4.markdown("**% Change**")
-        h5.markdown("**Rel Vol**")
-
-        st.divider()
-
-        # ----------------------------------------------------
-        # SCROLLABLE SCANNER
-        # ----------------------------------------------------
-
-        with st.container(
-            height=660,
-            border=False
-        ):
+        else:
 
             for _, row in filtered.iterrows():
 
@@ -526,7 +443,6 @@ with scanner_col:
                     row["Time"]
                 )
 
-                # CLICKABLE SYMBOL
                 if c2.button(
                     row["Symbol"],
                     key=f"stock_{row['Symbol']}",
@@ -551,34 +467,30 @@ with scanner_col:
                     f"{row['Rel Vol']:.2f}"
                 )
 
-    else:
 
-        st.warning(
-            "No scanner results available."
-        )
-
-
-# ============================================================
-# RIGHT - TRADINGVIEW
-# ============================================================
-
+# =========================================================
+# RIGHT — TRADINGVIEW
+# =========================================================
 with chart_col:
 
-    selected_ticker = (
-        st.session_state.selected_ticker
+    selected = st.session_state.selected_ticker
+
+    st.markdown(
+        f"**📈 {selected} — TradingView**"
     )
 
-    st.subheader(
-        f"TradingView — {selected_ticker}"
-    )
+    # Some stocks are listed on NYSE rather than NASDAQ
+    nyse_symbols = {
+        "GME",
+        "AMC",
+        "BB",
+        "OPEN"
+    }
 
-    safe_symbol = html.escape(
-        selected_ticker
-    )
-
-    # ========================================================
-    # RESPONSIVE SQUARE CHART
-    # ========================================================
+    if selected in nyse_symbols:
+        tv_symbol = f"NYSE:{selected}"
+    else:
+        tv_symbol = f"NASDAQ:{selected}"
 
     tradingview_html = f"""
     <!DOCTYPE html>
@@ -623,22 +535,21 @@ with chart_col:
 
     <body>
 
-        <div
-            class="tradingview-widget-container"
-        >
+        <div class="tradingview-widget-container">
 
             <div
-                class="tradingview-widget-container__widget"
-            ></div>
+                class="tradingview-widget-container__widget">
+            </div>
 
             <script
                 type="text/javascript"
                 src="https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js"
                 async
             >
+
             {{
                 "autosize": true,
-                "symbol": "NASDAQ:{safe_symbol}",
+                "symbol": "{tv_symbol}",
                 "interval": "5",
                 "timezone": "America/New_York",
                 "theme": "dark",
@@ -655,6 +566,7 @@ with chart_col:
                 "hide_volume": false,
                 "support_host": "https://www.tradingview.com"
             }}
+
             </script>
 
         </div>
@@ -664,14 +576,8 @@ with chart_col:
     </html>
     """
 
-    # --------------------------------------------------------
-    # IMPORTANT:
-    # The outer iframe is deliberately large enough.
-    # The TradingView widget itself fills the available area.
-    # --------------------------------------------------------
-
     components.html(
         tradingview_html,
-        height=720,
+        height=DASHBOARD_HEIGHT,
         scrolling=False
     )
