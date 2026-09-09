@@ -395,7 +395,7 @@ if (
       stocks = get_stock_universe()
 
 if stocks:
-    st.session_state.scanner_data = run_scanner(stocks)
+    st.session_state.scanner_data = run_scanner()
 else:
     st.session_state.scanner_data = pd.DataFrame()
 
