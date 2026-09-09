@@ -247,7 +247,6 @@ def calculate_stock(symbol):
 
         intraday = intraday.copy()
 
-        # Latest trading date
         latest_date = intraday.index[-1].date()
 
         today_data = intraday[
@@ -266,7 +265,7 @@ def calculate_stock(symbol):
         )
 
         # ----------------------------------------------------
-        # CURRENT SESSION VOLUME
+        # SESSION VOLUME
         # ----------------------------------------------------
 
         session_volume = float(
@@ -423,7 +422,7 @@ if (
 
 
 # ============================================================
-# MAIN TWO-COLUMN LAYOUT
+# MAIN LAYOUT
 # ============================================================
 
 scanner_col, chart_col = st.columns(
@@ -445,7 +444,7 @@ with scanner_col:
     if not df.empty:
 
         # ----------------------------------------------------
-        # FILTERS
+        # APPLY FILTERS
         # ----------------------------------------------------
 
         filtered = df[
@@ -490,7 +489,7 @@ with scanner_col:
         # ----------------------------------------------------
 
         with st.container(
-            height=610,
+            height=700,
             border=False
         ):
 
@@ -500,12 +499,14 @@ with scanner_col:
                     [1.1, 1.3, 1.15, 1.25, 1.1]
                 )
 
-                # TIME
                 c1.write(
                     row["Time"]
                 )
 
-                # SYMBOL BUTTON
+                # ------------------------------------------------
+                # CLICKABLE SYMBOL
+                # ------------------------------------------------
+
                 if c2.button(
                     row["Symbol"],
                     key=f"stock_{row['Symbol']}",
@@ -518,18 +519,15 @@ with scanner_col:
 
                     st.rerun()
 
-                # LTP
                 c3.write(
                     f"${row['LTP']:.2f}"
                 )
 
-                # PERCENT CHANGE
                 c4.write(
                     f"{row['% Change']:.2f}%"
                 )
 
-                # RELATIVE VOLUME
-                # NUMBER ONLY
+                # REL VOL = NUMBER ONLY
                 c5.write(
                     f"{row['Rel Vol']:.2f}"
                 )
@@ -559,59 +557,91 @@ with chart_col:
         selected_ticker
     )
 
-    # --------------------------------------------------------
-    # TRADINGVIEW ADVANCED CHART
-    # --------------------------------------------------------
+    # ========================================================
+    # SQUARE RESPONSIVE TRADINGVIEW CHART
+    # ========================================================
 
     tradingview_html = f"""
-    <div
-        class="tradingview-widget-container"
-        style="
-            width:100%;
-            height:650px;
-            overflow:hidden;
-        "
-    >
+    <!DOCTYPE html>
+
+    <html>
+
+    <head>
+
+        <style>
+
+            html, body {{
+                margin: 0;
+                padding: 0;
+                width: 100%;
+                height: 100%;
+                overflow: hidden;
+                background: #131722;
+            }}
+
+            .tradingview-widget-container {{
+                width: 100%;
+                aspect-ratio: 1 / 1;
+                position: relative;
+                overflow: hidden;
+            }}
+
+            .tradingview-widget-container__widget {{
+                width: 100%;
+                height: 100%;
+            }}
+
+        </style>
+
+    </head>
+
+    <body>
 
         <div
-            class="tradingview-widget-container__widget"
-            style="
-                width:100%;
-                height:650px;
-            "
-        ></div>
-
-        <script
-            type="text/javascript"
-            src="https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js"
-            async
+            class="tradingview-widget-container"
         >
-        {{
-            "autosize": true,
-            "symbol": "NASDAQ:{safe_symbol}",
-            "interval": "5",
-            "timezone": "America/New_York",
-            "theme": "dark",
-            "style": "1",
-            "locale": "en",
-            "allow_symbol_change": true,
-            "hide_top_toolbar": false,
-            "hide_side_toolbar": false,
-            "save_image": true,
-            "details": false,
-            "hotlist": false,
-            "calendar": false,
-            "withdateranges": true,
-            "hide_volume": false,
-            "support_host": "https://www.tradingview.com"
-        }}
-        </script>
 
-    </div>
+            <div
+                class="tradingview-widget-container__widget"
+            ></div>
+
+            <script
+                type="text/javascript"
+                src="https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js"
+                async
+            >
+            {{
+                "autosize": true,
+                "symbol": "NASDAQ:{safe_symbol}",
+                "interval": "5",
+                "timezone": "America/New_York",
+                "theme": "dark",
+                "style": "1",
+                "locale": "en",
+                "allow_symbol_change": true,
+                "hide_top_toolbar": false,
+                "hide_side_toolbar": false,
+                "save_image": true,
+                "details": false,
+                "hotlist": false,
+                "calendar": false,
+                "withdateranges": true,
+                "hide_volume": false,
+                "support_host": "https://www.tradingview.com"
+            }}
+            </script>
+
+        </div>
+
+    </body>
+
+    </html>
     """
 
+    # Large enough outer container so the square
+    # TradingView chart has room to render.
     components.html(
         tradingview_html,
-        height=660,
+        height=900,
         scrolling=False
     )
