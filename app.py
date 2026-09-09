@@ -404,7 +404,7 @@ df = st.session_state.scanner_data
 
 # APPLY FILTERS
 
-filtered = results.copy()
+filtered = df.copy()
 
 if not filtered.empty:
     filtered = filtered[
