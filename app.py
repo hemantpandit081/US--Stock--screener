@@ -19,7 +19,7 @@ st.set_page_config(
 
 
 # ============================================================
-# CSS — FIT DASHBOARD TO SCREEN
+# PAGE CSS
 # ============================================================
 
 st.markdown("""
@@ -28,33 +28,54 @@ st.markdown("""
 html, body {
     margin: 0;
     padding: 0;
-    overflow: hidden;
 }
 
 .block-container {
-    padding-top: 0.35rem;
-    padding-bottom: 0rem;
-    padding-left: 0.8rem;
-    padding-right: 0.8rem;
+    padding-top: 0.25rem !important;
+    padding-bottom: 0rem !important;
+    padding-left: 0.7rem !important;
+    padding-right: 0.7rem !important;
+    max-width: 100% !important;
 }
 
+/* Compact title */
 h1 {
-    margin-top: 0;
-    margin-bottom: 0.1rem;
-    font-size: 1.8rem;
+    margin-top: 0 !important;
+    margin-bottom: 0.05rem !important;
+    font-size: 1.7rem !important;
 }
 
 h2, h3 {
-    margin-top: 0.1rem;
-    margin-bottom: 0.2rem;
+    margin-top: 0 !important;
+    margin-bottom: 0.15rem !important;
 }
 
+/* Smaller gaps between columns */
 div[data-testid="stHorizontalBlock"] {
-    gap: 0.5rem;
+    gap: 0.4rem !important;
 }
 
-section[data-testid="stSidebar"] {
+/* Reduce spacing between Streamlit elements */
+div[data-testid="stVerticalBlock"] {
+    gap: 0.25rem;
+}
+
+/* Keep the main page from becoming unnecessarily tall */
+section.main {
+    overflow: hidden;
+}
+
+/* Scanner area */
+.scanner-box {
+    height: 560px;
     overflow-y: auto;
+    overflow-x: hidden;
+}
+
+/* TradingView area */
+.chart-box {
+    height: 560px;
+    overflow: hidden;
 }
 
 </style>
@@ -62,10 +83,11 @@ section[data-testid="stSidebar"] {
 
 
 # ============================================================
-# SETTINGS
+# SETTINGS FILE
 # ============================================================
 
 SETTINGS_FILE = "scanner_settings.json"
+
 
 DEFAULT_SETTINGS = {
     "min_price": 1.0,
@@ -77,7 +99,7 @@ DEFAULT_SETTINGS = {
 
 
 # ============================================================
-# LOAD SAVED SETTINGS
+# LOAD SETTINGS
 # ============================================================
 
 def load_saved_settings():
@@ -110,7 +132,6 @@ def save_settings(settings):
     try:
 
         with open(SETTINGS_FILE, "w") as f:
-
             json.dump(
                 settings,
                 f,
@@ -129,7 +150,7 @@ def save_settings(settings):
 
 
 # ============================================================
-# LOAD SETTINGS ON STARTUP
+# INITIAL SETTINGS
 # ============================================================
 
 if "settings_loaded" not in st.session_state:
@@ -164,17 +185,14 @@ if "settings_loaded" not in st.session_state:
 # ============================================================
 
 if "scanner_data" not in st.session_state:
-
     st.session_state.scanner_data = []
 
 
 if "selected_ticker" not in st.session_state:
-
     st.session_state.selected_ticker = "AAPL"
 
 
 if "last_scan_time" not in st.session_state:
-
     st.session_state.last_scan_time = None
 
 
@@ -234,7 +252,6 @@ def market_is_open():
     now = get_market_time()
 
     if now.weekday() >= 5:
-
         return False
 
     current_time = now.time()
@@ -257,7 +274,7 @@ def market_is_open():
 
 
 # ============================================================
-# CALCULATE STOCK DATA
+# STOCK CALCULATION
 # ============================================================
 
 def calculate_stock(symbol):
@@ -265,7 +282,7 @@ def calculate_stock(symbol):
     try:
 
         # ----------------------------------------------------
-        # INTRADAY DATA
+        # INTRADAY
         # ----------------------------------------------------
 
         intraday = yf.Ticker(
@@ -278,7 +295,6 @@ def calculate_stock(symbol):
         )
 
         if intraday.empty:
-
             return None
 
         intraday = intraday.dropna(
@@ -289,7 +305,6 @@ def calculate_stock(symbol):
         )
 
         if intraday.empty:
-
             return None
 
         # ----------------------------------------------------
@@ -305,7 +320,6 @@ def calculate_stock(symbol):
         ].copy()
 
         if session_data.empty:
-
             return None
 
         # ----------------------------------------------------
@@ -319,7 +333,7 @@ def calculate_stock(symbol):
         )
 
         # ----------------------------------------------------
-        # SESSION VOLUME
+        # CURRENT SESSION VOLUME
         # ----------------------------------------------------
 
         session_volume = float(
@@ -342,7 +356,6 @@ def calculate_stock(symbol):
         )
 
         if daily.empty:
-
             return None
 
         daily = daily.dropna(
@@ -353,7 +366,6 @@ def calculate_stock(symbol):
         )
 
         if len(daily) < 6:
-
             return None
 
         # ----------------------------------------------------
@@ -371,18 +383,16 @@ def calculate_stock(symbol):
         # ----------------------------------------------------
 
         percent_change = (
-
             (
                 ltp
                 - previous_close
             )
             / previous_close
             * 100
-
         )
 
         # ----------------------------------------------------
-        # PREVIOUS 5 DAYS AVERAGE VOLUME
+        # AVERAGE VOLUME
         # ----------------------------------------------------
 
         previous_volumes = daily[
@@ -435,7 +445,7 @@ def calculate_stock(symbol):
         )
 
         # ----------------------------------------------------
-        # RETURN
+        # RESULT
         # ----------------------------------------------------
 
         return {
@@ -555,7 +565,7 @@ with st.sidebar:
     )
 
     # --------------------------------------------------------
-    # MINIMUM PRICE
+    # MIN PRICE
     # --------------------------------------------------------
 
     st.session_state.min_price = (
@@ -570,7 +580,7 @@ with st.sidebar:
     )
 
     # --------------------------------------------------------
-    # MAXIMUM PRICE
+    # MAX PRICE
     # --------------------------------------------------------
 
     st.session_state.max_price = (
@@ -585,7 +595,7 @@ with st.sidebar:
     )
 
     # --------------------------------------------------------
-    # MINIMUM VOLUME
+    # MIN VOLUME
     # --------------------------------------------------------
 
     st.session_state.min_volume = (
@@ -600,7 +610,7 @@ with st.sidebar:
     )
 
     # --------------------------------------------------------
-    # MINIMUM RELATIVE VOLUME
+    # MIN RVOL
     # --------------------------------------------------------
 
     st.session_state.min_rvol = (
@@ -615,7 +625,7 @@ with st.sidebar:
     )
 
     # --------------------------------------------------------
-    # MINIMUM % CHANGE
+    # MIN CHANGE
     # --------------------------------------------------------
 
     st.session_state.min_change = (
@@ -632,7 +642,7 @@ with st.sidebar:
     st.markdown("---")
 
     # --------------------------------------------------------
-    # SAVE SETTINGS
+    # SAVE
     # --------------------------------------------------------
 
     if st.button(
@@ -701,7 +711,7 @@ with st.sidebar:
     st.markdown("---")
 
     # --------------------------------------------------------
-    # SCAN
+    # SCAN BUTTON
     # --------------------------------------------------------
 
     scan_button = st.button(
@@ -733,7 +743,7 @@ if scan_button:
 
 
 # ============================================================
-# LAST SCAN TIME
+# LAST SCAN
 # ============================================================
 
 if st.session_state.last_scan_time:
@@ -745,10 +755,7 @@ if st.session_state.last_scan_time:
 
 
 # ============================================================
-# MAIN LAYOUT
-#
-# LEFT  = 35%
-# RIGHT = 65%
+# MAIN DASHBOARD
 # ============================================================
 
 scanner_col, chart_col = st.columns(
@@ -758,7 +765,7 @@ scanner_col, chart_col = st.columns(
 
 
 # ============================================================
-# SCANNER — LEFT 35%
+# LEFT — SCANNER
 # ============================================================
 
 with scanner_col:
@@ -776,7 +783,7 @@ with scanner_col:
         filtered = []
 
         # ----------------------------------------------------
-        # APPLY FILTERS
+        # FILTER STOCKS
         # ----------------------------------------------------
 
         for row in data:
@@ -813,7 +820,7 @@ with scanner_col:
                 )
 
         # ----------------------------------------------------
-        # SORT BY RELATIVE VOLUME
+        # SORT RVOL HIGH TO LOW
         # ----------------------------------------------------
 
         filtered = sorted(
@@ -823,7 +830,7 @@ with scanner_col:
         )
 
         # ----------------------------------------------------
-        # SCANNER HEADER
+        # HEADER
         # ----------------------------------------------------
 
         h1, h2, h3, h4, h5 = st.columns(
@@ -907,10 +914,6 @@ with scanner_col:
                 f"{row['Rel Vol']:.1f}"
             )
 
-        # ----------------------------------------------------
-        # RESULTS
-        # ----------------------------------------------------
-
         st.caption(
             f"{len(filtered)} stocks matched"
         )
@@ -923,7 +926,7 @@ with scanner_col:
 
 
 # ============================================================
-# TRADINGVIEW — RIGHT 65%
+# RIGHT — TRADINGVIEW
 # ============================================================
 
 with chart_col:
@@ -940,7 +943,7 @@ with chart_col:
     )
 
     # --------------------------------------------------------
-    # EXCHANGE MAPPING
+    # EXCHANGE
     # --------------------------------------------------------
 
     nyse_symbols = {
@@ -963,142 +966,180 @@ with chart_col:
         )
 
     # ========================================================
-    # TRADINGVIEW HTML
+    # TRADINGVIEW WIDGET
     # ========================================================
 
     tradingview_html = f"""
 
-    <style>
+    <!DOCTYPE html>
 
-        html,
-        body {{
-            margin: 0;
-            padding: 0;
-            width: 100%;
-            height: 100%;
-            overflow: hidden;
-        }}
+    <html>
 
-        .tradingview-wrapper {{
-            width: 100%;
-            height: 100%;
-            overflow: hidden;
-        }}
+    <head>
 
-        .tradingview-widget-container {{
-            width: 100%;
-            height: 100%;
-        }}
+        <style>
 
-        .tradingview-widget-container__widget {{
-            width: 100%;
-            height: calc(100% - 32px);
-        }}
+            html,
+            body {{
 
-        .tradingview-widget-copyright {{
-            height: 32px;
-            line-height: 32px;
-        }}
+                margin: 0;
+                padding: 0;
 
-    </style>
+                width: 100%;
+                height: 100%;
+
+                overflow: hidden;
+
+                background: #131722;
+
+            }}
+
+            .tradingview-wrapper {{
+
+                width: 100%;
+                height: 100%;
+
+                overflow: hidden;
+
+            }}
+
+            .tradingview-widget-container {{
+
+                width: 100%;
+                height: 100%;
+
+                overflow: hidden;
+
+            }}
+
+            .tradingview-widget-container__widget {{
+
+                width: 100%;
+                height: calc(100% - 28px);
+
+            }}
+
+            .tradingview-widget-copyright {{
+
+                height: 28px;
+
+                line-height: 28px;
+
+                font-size: 11px;
+
+                text-align: center;
+
+            }}
+
+        </style>
+
+    </head>
 
 
-    <div class="tradingview-wrapper">
+    <body>
 
-        <div
-            class="tradingview-widget-container"
-        >
+        <div class="tradingview-wrapper">
 
             <div
-                class="tradingview-widget-container__widget"
-            ></div>
-
-            <div
-                class="tradingview-widget-copyright"
+                class="tradingview-widget-container"
             >
 
-                <a
-                    href="https://www.tradingview.com/"
-                    rel="noopener nofollow"
-                    target="_blank"
+                <div
+                    class="tradingview-widget-container__widget"
+                ></div>
+
+
+                <div
+                    class="tradingview-widget-copyright"
                 >
-                    TradingView
-                </a>
+
+                    <a
+                        href="https://www.tradingview.com/"
+                        rel="noopener nofollow"
+                        target="_blank"
+                    >
+                        TradingView
+                    </a>
+
+                </div>
+
+
+                <script
+                    type="text/javascript"
+                    src="https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js"
+                    async
+                >
+
+                {{
+
+                    "autosize": true,
+
+                    "symbol": "{tv_symbol}",
+
+                    "interval": "5",
+
+                    "timezone": "America/New_York",
+
+                    "theme": "dark",
+
+                    "style": "1",
+
+                    "locale": "en",
+
+                    "enable_publishing": false,
+
+                    "allow_symbol_change": true,
+
+                    "hide_top_toolbar": false,
+
+                    "hide_side_toolbar": false,
+
+                    "withdateranges": true,
+
+                    "hide_volume": false,
+
+                    "save_image": true,
+
+                    "studies": [],
+
+                    "show_popup_button": true,
+
+                    "popup_width": "1000",
+
+                    "popup_height": "700",
+
+                    "calendar": false,
+
+                    "details": false,
+
+                    "hotlist": false,
+
+                    "support_host":
+                        "https://www.tradingview.com"
+
+                }}
+
+                </script>
 
             </div>
 
-
-            <script
-                type="text/javascript"
-                src="https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js"
-                async
-            >
-
-            {{
-                "autosize": true,
-
-                "symbol": "{tv_symbol}",
-
-                "interval": "5",
-
-                "timezone": "America/New_York",
-
-                "theme": "dark",
-
-                "style": "1",
-
-                "locale": "en",
-
-                "enable_publishing": false,
-
-                "allow_symbol_change": true,
-
-                "hide_top_toolbar": false,
-
-                "hide_side_toolbar": false,
-
-                "withdateranges": true,
-
-                "hide_volume": false,
-
-                "save_image": true,
-
-                "studies": [],
-
-                "show_popup_button": true,
-
-                "popup_width": "1000",
-
-                "popup_height": "700",
-
-                "calendar": false,
-
-                "details": false,
-
-                "hotlist": false,
-
-                "support_host":
-                    "https://www.tradingview.com"
-            }}
-
-            </script>
-
         </div>
 
-    </div>
+    </body>
+
+    </html>
 
     """
 
+
     # ========================================================
-    # HEIGHT
+    # IMPORTANT:
+    # 560px keeps scanner + chart inside a normal laptop
+    # browser without making the page unnecessarily tall.
     # ========================================================
-    #
-    # The iframe is deliberately limited so the page itself
-    # does not become taller than the browser window.
-    #
 
     components.html(
         tradingview_html,
-        height=650,
+        height=560,
         scrolling=False
     )
