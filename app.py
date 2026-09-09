@@ -1,30 +1,31 @@
+```python
 import streamlit as st
 import pandas as pd
-import numpy as np
 import yfinance as yf
-import requests
-import io
-import os
 import json
+import os
 from datetime import datetime, time
 from zoneinfo import ZoneInfo
 
+
 # ============================================================
-# PAGE CONFIG
+# PAGE
 # ============================================================
 
 st.set_page_config(
     page_title="US Momentum Scanner",
     page_icon="📈",
     layout="wide",
-    initial_sidebar_state="collapsed"
+    initial_sidebar_state="collapsed",
 )
 
+
 # ============================================================
-# CONSTANTS
+# SETTINGS
 # ============================================================
 
 SETTINGS_FILE = "scanner_settings.json"
+
 NY_TZ = ZoneInfo("America/New_York")
 
 DEFAULT_SETTINGS = {
@@ -33,336 +34,322 @@ DEFAULT_SETTINGS = {
     "min_volume": 100000,
     "min_rvol": 2.0,
     "min_change": 2.0,
-    "max_stocks": 300,
     "repeat_tolerance": 0.90,
     "refresh_seconds": 60,
     "auto_scan": False,
 }
 
+
 # ============================================================
-# PROFESSIONAL TRADING UI
+# 30 STOCKS
+# ============================================================
+#
+# These replace the Russell 2000 universe.
+# You can change this list later.
+#
+
+STOCKS = [
+    "AAPL",
+    "AMD",
+    "AMZN",
+    "BAC",
+    "COIN",
+    "F",
+    "HOOD",
+    "INTC",
+    "IONQ",
+    "MARA",
+    "META",
+    "MSTR",
+    "MU",
+    "NFLX",
+    "NIO",
+    "NVDA",
+    "ORCL",
+    "PLTR",
+    "PYPL",
+    "RBLX",
+    "RIVN",
+    "SMCI",
+    "SNAP",
+    "SOFI",
+    "T",
+    "TSLA",
+    "UBER",
+    "WBD",
+    "WFC",
+    "XOM",
+]
+
+
+# ============================================================
+# CSS
 # ============================================================
 
 st.markdown(
     """
     <style>
 
-    /* ======================================================
-       GLOBAL
-       ====================================================== */
+    /* ------------------------------
+       Overall page
+       ------------------------------ */
 
     .stApp {
-        background-color: #0b0f14;
+        background: #0b0f14;
         color: #e6edf3;
     }
 
     .block-container {
-        max-width: 100%;
-        padding-top: 0.65rem;
+        padding-top: 0.6rem;
         padding-left: 0.8rem;
         padding-right: 0.8rem;
-        padding-bottom: 0.5rem;
+        padding-bottom: 0.4rem;
+        max-width: 100%;
     }
 
-    header[data-testid="stHeader"] {
-        background: #0b0f14;
-    }
 
-    /* ======================================================
-       TOP BAR
-       ====================================================== */
+    /* ------------------------------
+       Top header
+       ------------------------------ */
 
-    .topbar {
-        height: 46px;
+    .top-header {
+        height: 45px;
         display: flex;
         align-items: center;
         justify-content: space-between;
-        border-bottom: 1px solid #202832;
+
+        border-bottom: 1px solid #252c35;
+
         margin-bottom: 8px;
     }
 
-    .brand {
+    .app-title {
         font-size: 19px;
         font-weight: 700;
         color: #f0f3f6;
-        letter-spacing: 0.2px;
     }
 
-    .brand span {
+    .app-title-blue {
         color: #58a6ff;
-    }
-
-    .market-status {
-        font-size: 12px;
-        font-weight: 600;
-        color: #8b949e;
     }
 
     .market-open {
         color: #3fb950;
+        font-size: 11px;
+        font-weight: 600;
     }
 
     .market-closed {
-        color: #8b949e;
+        color: #6e7681;
+        font-size: 11px;
+        font-weight: 600;
     }
 
-    /* ======================================================
-       SCANNER PANEL
-       ====================================================== */
 
-    .scanner-panel {
+    /* ------------------------------
+       Panel
+       ------------------------------ */
+
+    .panel {
         background: #0f141a;
-        border: 1px solid #202832;
-        border-radius: 6px;
-        overflow: hidden;
+        border: 1px solid #252c35;
+        border-radius: 5px;
     }
 
-    .scanner-title-row {
-        height: 43px;
+    .panel-header {
+        height: 42px;
+
         display: flex;
         align-items: center;
         justify-content: space-between;
-        padding: 0 12px;
-        border-bottom: 1px solid #202832;
+
+        padding-left: 11px;
+        padding-right: 11px;
+
+        border-bottom: 1px solid #252c35;
     }
 
-    .scanner-title {
-        font-size: 14px;
-        font-weight: 700;
+    .panel-title {
         color: #dce3ea;
+        font-size: 13px;
+        font-weight: 700;
     }
 
-    .scanner-count {
-        font-size: 11px;
-        color: #7d8590;
-    }
-
-    /* ======================================================
-       TABLE HEADER
-       ====================================================== */
-
-    .table-header {
-        display: grid;
-        grid-template-columns:
-            55px
-            minmax(95px, 1.3fr)
-            72px
-            82px
-            65px;
-
-        height: 31px;
-        align-items: center;
-
-        padding: 0 9px;
-
-        background: #111820;
-        border-bottom: 1px solid #202832;
-
+    .panel-subtitle {
+        color: #6e7681;
         font-size: 10px;
+    }
+
+
+    /* ------------------------------
+       Scanner header
+       ------------------------------ */
+
+    .scanner-header {
+        color: #6e7681;
+
+        font-size: 9px;
         font-weight: 600;
-        color: #737d89;
+
         text-transform: uppercase;
-        letter-spacing: 0.3px;
+
+        padding-top: 7px;
+        padding-bottom: 7px;
+        padding-left: 8px;
+        padding-right: 8px;
+
+        border-bottom: 1px solid #20262e;
     }
 
-    /* ======================================================
-       STOCK ROW
-       ====================================================== */
 
-    .stock-row {
-        display: grid;
-        grid-template-columns:
-            55px
-            minmax(95px, 1.3fr)
-            72px
-            82px
-            65px;
+    /* ------------------------------
+       Scanner row
+       ------------------------------ */
 
-        height: 38px;
-        align-items: center;
+    .scanner-row {
+        min-height: 38px;
 
-        padding: 0 9px;
+        border-bottom: 1px solid #181e25;
 
-        border-bottom: 1px solid #171e26;
-
-        font-size: 12px;
-        color: #c9d1d9;
-
-        transition: background 0.12s ease;
-    }
-
-    .stock-row:hover {
-        background: #151c24;
-    }
-
-    .time-cell {
-        color: #69737f;
-        font-size: 10px;
-    }
-
-    .symbol-cell {
         display: flex;
         align-items: center;
-        gap: 6px;
+    }
+
+    .scanner-row:hover {
+        background: #131920;
+    }
+
+
+    /* ------------------------------
+       Text
+       ------------------------------ */
+
+    .time-text {
+        color: #69737e;
+        font-size: 10px;
+    }
+
+    .price-text {
+        color: #dce3ea;
+        font-size: 12px;
+    }
+
+    .positive-text {
+        color: #3fb950;
+        font-size: 12px;
+        font-weight: 600;
+    }
+
+    .negative-text {
+        color: #f85149;
+        font-size: 12px;
+        font-weight: 600;
+    }
+
+    .rvol-text {
+        color: #58a6ff;
+        font-size: 12px;
+        font-weight: 600;
     }
 
     .repeat-dot {
-        color: #ffffff;
+        color: white;
         font-size: 10px;
-        width: 9px;
-        display: inline-block;
+        margin-right: 5px;
     }
 
-    .empty-dot {
+    .no-repeat-dot {
         visibility: hidden;
+        font-size: 10px;
+        margin-right: 5px;
     }
 
-    .symbol-text {
-        color: #f0f3f6;
-        font-weight: 700;
-        letter-spacing: 0.2px;
-    }
 
-    .price-cell {
-        color: #dce3ea;
-        font-variant-numeric: tabular-nums;
-    }
-
-    .change-positive {
-        color: #3fb950;
-        font-weight: 600;
-        font-variant-numeric: tabular-nums;
-    }
-
-    .change-negative {
-        color: #f85149;
-        font-weight: 600;
-        font-variant-numeric: tabular-nums;
-    }
-
-    .rvol-cell {
-        color: #58a6ff;
-        font-weight: 600;
-        font-variant-numeric: tabular-nums;
-    }
-
-    /* ======================================================
-       TRADINGVIEW PANEL
-       ====================================================== */
-
-    .chart-panel {
-        background: #0f141a;
-        border: 1px solid #202832;
-        border-radius: 6px;
-        overflow: hidden;
-    }
-
-    .chart-header {
-        height: 43px;
-        display: flex;
-        align-items: center;
-        padding: 0 13px;
-        border-bottom: 1px solid #202832;
-        color: #dce3ea;
-        font-size: 14px;
-        font-weight: 700;
-    }
-
-    .chart-symbol {
-        color: #58a6ff;
-        margin-left: 5px;
-    }
-
-    /* ======================================================
-       BUTTONS
-       ====================================================== */
+    /* ------------------------------
+       Ticker buttons
+       ------------------------------ */
 
     div.stButton > button {
-        background: transparent;
-        color: #f0f3f6;
-        border: none;
-        padding: 0;
-        margin: 0;
-        min-height: 0;
-        height: 38px;
-        width: 100%;
-        text-align: left;
-        font-size: 12px;
-        font-weight: 700;
-        border-radius: 0;
+        background: transparent !important;
+
+        border: none !important;
+
+        color: #f0f3f6 !important;
+
+        font-size: 12px !important;
+
+        font-weight: 700 !important;
+
+        padding: 0 !important;
+
+        height: 34px !important;
+
+        min-height: 34px !important;
+
+        text-align: left !important;
+
+        box-shadow: none !important;
+
+        border-radius: 3px !important;
     }
 
     div.stButton > button:hover {
-        background: #151c24;
-        color: #58a6ff;
-        border: none;
+        background: #18212b !important;
+        color: #58a6ff !important;
     }
 
-    div.stButton > button:focus {
-        box-shadow: none;
-        border: none;
-    }
 
-    /* ======================================================
-       SIDEBAR
-       ====================================================== */
+    /* ------------------------------
+       Empty scanner
+       ------------------------------ */
 
-    section[data-testid="stSidebar"] {
-        background: #0f141a;
-        border-right: 1px solid #202832;
-    }
+    .empty-scanner {
+        padding-top: 45px;
+        padding-bottom: 45px;
 
-    section[data-testid="stSidebar"] .block-container {
-        padding-top: 1rem;
-    }
-
-    /* ======================================================
-       INPUTS
-       ====================================================== */
-
-    div[data-baseweb="input"] {
-        background: #111820;
-    }
-
-    div[data-baseweb="select"] {
-        background: #111820;
-    }
-
-    /* ======================================================
-       INFO / EMPTY STATE
-       ====================================================== */
-
-    .empty-state {
-        padding: 35px 15px;
         text-align: center;
-        color: #687381;
+
+        color: #6e7681;
+
         font-size: 12px;
     }
 
-    .empty-state-title {
+    .empty-title {
         color: #aab4bf;
         font-weight: 600;
-        margin-bottom: 6px;
+        margin-bottom: 5px;
     }
 
-    /* ======================================================
-       FOOTER
-       ====================================================== */
 
-    .footer {
-        text-align: right;
-        color: #4f5965;
+    /* ------------------------------
+       Sidebar
+       ------------------------------ */
+
+    section[data-testid="stSidebar"] {
+        background: #0f141a;
+        border-right: 1px solid #252c35;
+    }
+
+
+    /* ------------------------------
+       Small status text
+       ------------------------------ */
+
+    .last-scan {
+        color: #59636e;
         font-size: 9px;
-        padding-top: 5px;
+        text-align: right;
+        margin-top: 4px;
     }
 
     </style>
     """,
-    unsafe_allow_html=True
+    unsafe_allow_html=True,
 )
 
+
 # ============================================================
-# SETTINGS
+# SETTINGS FUNCTIONS
 # ============================================================
 
 def load_settings():
@@ -372,8 +359,8 @@ def load_settings():
 
     try:
 
-        with open(SETTINGS_FILE, "r") as f:
-            saved = json.load(f)
+        with open(SETTINGS_FILE, "r") as file:
+            saved = json.load(file)
 
         settings = DEFAULT_SETTINGS.copy()
         settings.update(saved)
@@ -389,16 +376,18 @@ def save_settings(settings):
 
     try:
 
-        with open(SETTINGS_FILE, "w") as f:
-            json.dump(settings, f, indent=4)
+        with open(SETTINGS_FILE, "w") as file:
+            json.dump(
+                settings,
+                file,
+                indent=4
+            )
 
-        return True
+    except Exception as error:
 
-    except Exception as e:
-
-        st.error(f"Unable to save settings: {e}")
-
-        return False
+        st.error(
+            f"Unable to save settings: {error}"
+        )
 
 
 # ============================================================
@@ -409,7 +398,7 @@ if "settings" not in st.session_state:
     st.session_state.settings = load_settings()
 
 if "selected_ticker" not in st.session_state:
-    st.session_state.selected_ticker = "AAPL"
+    st.session_state.selected_ticker = "NVDA"
 
 if "scanner_data" not in st.session_state:
     st.session_state.scanner_data = pd.DataFrame()
@@ -417,12 +406,9 @@ if "scanner_data" not in st.session_state:
 if "last_scan" not in st.session_state:
     st.session_state.last_scan = None
 
-if "scanner_error" not in st.session_state:
-    st.session_state.scanner_error = None
-
 
 # ============================================================
-# MARKET HOURS
+# MARKET STATUS
 # ============================================================
 
 def market_is_open():
@@ -440,156 +426,25 @@ def market_is_open():
 
 
 # ============================================================
-# RUSSELL 2000
-# ============================================================
-
-@st.cache_data(ttl=86400)
-def load_russell_2000():
-
-    url = (
-        "https://www.ishares.com/us/products/239710/"
-        "ishares-russell-2000-etf/latest-holdings.csv"
-    )
-
-    response = requests.get(
-        url,
-        timeout=20,
-        headers={
-            "User-Agent": "Mozilla/5.0"
-        }
-    )
-
-    response.raise_for_status()
-
-    lines = response.text.splitlines()
-
-    header_index = None
-
-    for i, line in enumerate(lines):
-
-        if line.startswith("Ticker,"):
-            header_index = i
-            break
-
-    if header_index is None:
-
-        raise ValueError(
-            "Russell 2000 CSV header not found."
-        )
-
-    csv_text = "\n".join(
-        lines[header_index:]
-    )
-
-    df = pd.read_csv(
-        io.StringIO(csv_text)
-    )
-
-    if "Ticker" not in df.columns:
-
-        raise ValueError(
-            "Ticker column not found."
-        )
-
-    symbols = (
-        df["Ticker"]
-        .astype(str)
-        .str.strip()
-    )
-
-    symbols = symbols[
-        ~symbols.isin(
-            [
-                "",
-                "nan",
-                "-",
-                "USD",
-                "CASH"
-            ]
-        )
-    ]
-
-    symbols = (
-        symbols
-        .str.replace(
-            ".",
-            "-",
-            regex=False
-        )
-        .tolist()
-    )
-
-    return symbols
-
-
-# ============================================================
-# YAHOO DATA
-# ============================================================
-
-def get_symbol_data(df, symbol):
-
-    if df is None or df.empty:
-        return None
-
-    try:
-
-        if isinstance(
-            df.columns,
-            pd.MultiIndex
-        ):
-
-            level_values = (
-                df.columns
-                .get_level_values(1)
-            )
-
-            if symbol not in level_values:
-                return None
-
-            result = df.xs(
-                symbol,
-                axis=1,
-                level=1
-            )
-
-        else:
-
-            result = df
-
-        result = result.dropna(
-            how="all"
-        )
-
-        if result.empty:
-            return None
-
-        return result
-
-    except Exception:
-
-        return None
-
-
-# ============================================================
-# REPEAT DETECTION
+# REPEAT VOLUME
 # ============================================================
 
 def detect_repeat(
-    session_data,
+    intraday,
     tolerance
 ):
 
-    if (
-        session_data is None
-        or session_data.empty
-    ):
+    if intraday is None:
         return False
 
-    if "Volume" not in session_data.columns:
+    if intraday.empty:
+        return False
+
+    if "Volume" not in intraday.columns:
         return False
 
     volumes = pd.to_numeric(
-        session_data["Volume"],
+        intraday["Volume"],
         errors="coerce"
     ).dropna()
 
@@ -600,13 +455,13 @@ def detect_repeat(
         volumes.iloc[-1]
     )
 
-    previous_volume = volumes.iloc[:-1]
+    previous_volumes = volumes.iloc[:-1]
 
-    if previous_volume.empty:
+    if previous_volumes.empty:
         return False
 
     highest_previous = float(
-        previous_volume.max()
+        previous_volumes.max()
     )
 
     if highest_previous <= 0:
@@ -619,19 +474,80 @@ def detect_repeat(
 
 
 # ============================================================
-# SCAN BATCH
+# YAHOO DATA CLEANUP
 # ============================================================
 
-def scan_batch(symbols):
+def clean_yahoo_data(
+    data,
+    symbol
+):
 
-    results = []
+    if data is None:
+        return None
 
-    if not symbols:
-        return results
+    if data.empty:
+        return None
+
+    try:
+
+        if isinstance(
+            data.columns,
+            pd.MultiIndex
+        ):
+
+            # Try symbol level
+            try:
+
+                data = data.xs(
+                    symbol,
+                    axis=1,
+                    level=1
+                )
+
+            except Exception:
+
+                try:
+
+                    data = data.xs(
+                        symbol,
+                        axis=1,
+                        level=0
+                    )
+
+                except Exception:
+                    pass
+
+        data = data.dropna(
+            how="all"
+        )
+
+        if data.empty:
+            return None
+
+        return data
+
+    except Exception:
+
+        return None
+
+
+# ============================================================
+# SCAN ALL 30 STOCKS
+# ============================================================
+
+def run_scanner():
+
+    settings = st.session_state.settings
+
+    symbols = STOCKS.copy()
 
     # --------------------------------------------------------
-    # Intraday
+    # Download 1-minute data
     # --------------------------------------------------------
+
+    progress = st.progress(0)
+
+    status = st.empty()
 
     try:
 
@@ -642,15 +558,28 @@ def scan_batch(symbols):
             group_by="ticker",
             auto_adjust=False,
             progress=False,
-            threads=True
+            threads=True,
         )
 
-    except Exception:
+    except Exception as error:
 
-        return results
+        progress.empty()
+        status.empty()
+
+        st.error(
+            f"Could not download 1-minute data: {error}"
+        )
+
+        return pd.DataFrame()
+
+    progress.progress(0.50)
+
+    status.markdown(
+        "**Downloading daily data...**"
+    )
 
     # --------------------------------------------------------
-    # Daily
+    # Download daily data
     # --------------------------------------------------------
 
     try:
@@ -662,22 +591,30 @@ def scan_batch(symbols):
             group_by="ticker",
             auto_adjust=False,
             progress=False,
-            threads=True
+            threads=True,
         )
 
     except Exception:
 
         daily = None
 
+    progress.progress(0.75)
+
+    status.markdown(
+        "**Processing stocks...**"
+    )
+
+    results = []
+
     # --------------------------------------------------------
-    # Symbols
+    # Process each stock
     # --------------------------------------------------------
 
     for symbol in symbols:
 
         try:
 
-            intraday_data = get_symbol_data(
+            intraday_data = clean_yahoo_data(
                 intraday,
                 symbol
             )
@@ -688,60 +625,49 @@ def scan_batch(symbols):
             ):
                 continue
 
-            # ------------------------------------------------
-            # Close
-            # ------------------------------------------------
+            # -----------------------------------------------
+            # Price
+            # -----------------------------------------------
 
-            closes = pd.to_numeric(
+            close = pd.to_numeric(
                 intraday_data["Close"],
                 errors="coerce"
             ).dropna()
 
-            if closes.empty:
+            if close.empty:
                 continue
 
             ltp = float(
-                closes.iloc[-1]
+                close.iloc[-1]
             )
 
             if ltp <= 0:
                 continue
 
-            # ------------------------------------------------
+            # -----------------------------------------------
             # Volume
-            # ------------------------------------------------
+            # -----------------------------------------------
 
-            volumes = pd.to_numeric(
+            volume = pd.to_numeric(
                 intraday_data["Volume"],
                 errors="coerce"
             ).fillna(0)
 
             session_volume = int(
-                volumes.sum()
+                volume.sum()
             )
 
             if session_volume <= 0:
                 continue
 
-            # ------------------------------------------------
-            # Repeat
-            # ------------------------------------------------
-
-            repeat = detect_repeat(
-                intraday_data,
-                st.session_state.settings[
-                    "repeat_tolerance"
-                ]
-            )
-
-            # ------------------------------------------------
+            # -----------------------------------------------
             # Daily data
-            # ------------------------------------------------
+            # -----------------------------------------------
 
             previous_close = None
-            avg_daily_volume = None
+            average_volume = None
 
-            daily_data = get_symbol_data(
+            daily_data = clean_yahoo_data(
                 daily,
                 symbol
             )
@@ -751,26 +677,26 @@ def scan_batch(symbols):
                 and not daily_data.empty
             ):
 
-                daily_closes = pd.to_numeric(
+                daily_close = pd.to_numeric(
                     daily_data["Close"],
                     errors="coerce"
                 ).dropna()
 
-                daily_volumes = pd.to_numeric(
+                daily_volume = pd.to_numeric(
                     daily_data["Volume"],
                     errors="coerce"
                 ).dropna()
 
-                if len(daily_closes) >= 2:
+                if len(daily_close) >= 2:
 
                     previous_close = float(
-                        daily_closes.iloc[-2]
+                        daily_close.iloc[-2]
                     )
 
-                if len(daily_volumes) >= 6:
+                if len(daily_volume) >= 6:
 
-                    avg_daily_volume = float(
-                        daily_volumes.iloc[-6:-1].mean()
+                    average_volume = float(
+                        daily_volume.iloc[-6:-1].mean()
                     )
 
             if (
@@ -780,57 +706,76 @@ def scan_batch(symbols):
                 continue
 
             if (
-                avg_daily_volume is None
-                or avg_daily_volume <= 0
+                average_volume is None
+                or average_volume <= 0
             ):
                 continue
 
-            # ------------------------------------------------
-            # Percentage
-            # ------------------------------------------------
+            # -----------------------------------------------
+            # % Change
+            # -----------------------------------------------
 
-            pct_change = (
-                (ltp - previous_close)
+            percent_change = (
+                (
+                    ltp
+                    - previous_close
+                )
                 / previous_close
-                * 100
-            )
+            ) * 100
 
-            # ------------------------------------------------
+            # -----------------------------------------------
             # Relative volume
-            # ------------------------------------------------
+            # -----------------------------------------------
 
-            rel_volume = (
+            relative_volume = (
                 session_volume
-                / avg_daily_volume
+                / average_volume
             )
 
-            # ------------------------------------------------
+            # -----------------------------------------------
+            # Repeat
+            # -----------------------------------------------
+
+            repeat = detect_repeat(
+                intraday_data,
+                settings["repeat_tolerance"]
+            )
+
+            # -----------------------------------------------
             # Time
-            # ------------------------------------------------
+            # -----------------------------------------------
 
             latest_time = (
                 intraday_data.index[-1]
             )
 
-            if latest_time.tzinfo is None:
+            try:
 
-                latest_time = latest_time.replace(
-                    tzinfo=NY_TZ
+                if latest_time.tzinfo is None:
+
+                    latest_time = latest_time.replace(
+                        tzinfo=NY_TZ
+                    )
+
+                else:
+
+                    latest_time = latest_time.astimezone(
+                        NY_TZ
+                    )
+
+                time_text = (
+                    latest_time.strftime(
+                        "%H:%M"
+                    )
                 )
 
-            else:
+            except Exception:
 
-                latest_time = latest_time.astimezone(
-                    NY_TZ
-                )
+                time_text = "--"
 
-            time_text = latest_time.strftime(
-                "%H:%M"
-            )
-
-            # ------------------------------------------------
-            # Result
-            # ------------------------------------------------
+            # -----------------------------------------------
+            # Store
+            # -----------------------------------------------
 
             results.append(
                 {
@@ -841,15 +786,15 @@ def scan_batch(symbols):
                         2
                     ),
                     "% Change": round(
-                        float(pct_change),
+                        float(percent_change),
                         2
                     ),
                     "Rel Vol": round(
-                        float(rel_volume),
+                        float(relative_volume),
                         1
                     ),
                     "Volume": session_volume,
-                    "Repeat": bool(repeat)
+                    "Repeat": repeat,
                 }
             )
 
@@ -857,86 +802,22 @@ def scan_batch(symbols):
 
             continue
 
-    return results
-
-
-# ============================================================
-# RUN SCANNER
-# ============================================================
-
-def run_scanner():
-
-    settings = st.session_state.settings
-
-    symbols = load_russell_2000()
-
-    if not symbols:
-
-        return pd.DataFrame()
-
-    symbols = symbols[
-        :int(settings["max_stocks"])
-    ]
-
-    batch_size = 50
-
-    all_results = []
-
-    total_batches = (
-        len(symbols)
-        + batch_size
-        - 1
-    ) // batch_size
-
-    progress = st.progress(0)
-
-    status = st.empty()
-
-    for start in range(
-        0,
-        len(symbols),
-        batch_size
-    ):
-
-        batch = symbols[
-            start:start + batch_size
-        ]
-
-        batch_number = (
-            start // batch_size
-        ) + 1
-
-        status.markdown(
-            f"Scanning "
-            f"**{batch_number}/{total_batches}**"
-        )
-
-        batch_results = scan_batch(
-            batch
-        )
-
-        all_results.extend(
-            batch_results
-        )
-
-        progress.progress(
-            batch_number / total_batches
-        )
+    progress.progress(1.0)
 
     progress.empty()
     status.empty()
 
-    if not all_results:
+    if not results:
 
         return pd.DataFrame()
 
     df = pd.DataFrame(
-        all_results
+        results
     )
 
-    # --------------------------------------------------------
+    # ========================================================
     # FILTERS
-    # --------------------------------------------------------
+    # ========================================================
 
     df = df[
         (df["LTP"] >= settings["min_price"])
@@ -950,20 +831,20 @@ def run_scanner():
         (df["% Change"] >= settings["min_change"])
     ]
 
-    # --------------------------------------------------------
+    # ========================================================
     # SORT
-    # --------------------------------------------------------
+    # ========================================================
 
     df = df.sort_values(
         by=[
             "Repeat",
             "Rel Vol",
-            "% Change"
+            "% Change",
         ],
         ascending=[
             False,
             False,
-            False
+            False,
         ]
     )
 
@@ -982,14 +863,12 @@ def tradingview_chart(symbol):
 
     tv_symbol = f"NASDAQ:{symbol}"
 
-    chart_html = f"""
+    chart = f"""
     <!DOCTYPE html>
 
     <html>
 
     <head>
-
-        <meta charset="UTF-8">
 
         <style>
 
@@ -997,13 +876,16 @@ def tradingview_chart(symbol):
             body {{
                 margin: 0;
                 padding: 0;
+
                 width: 100%;
                 height: 100%;
+
                 overflow: hidden;
+
                 background: #0b0f14;
             }}
 
-            #tv_chart {{
+            #tradingview {{
                 width: 100%;
                 height: 100%;
             }}
@@ -1014,10 +896,9 @@ def tradingview_chart(symbol):
 
     <body>
 
-        <div id="tv_chart"></div>
+        <div id="tradingview"></div>
 
         <script
-            type="text/javascript"
             src="https://s3.tradingview.com/tv.js">
         </script>
 
@@ -1052,7 +933,8 @@ def tradingview_chart(symbol):
 
                 save_image: false,
 
-                container_id: "tv_chart"
+                container_id:
+                    "tradingview"
 
             }});
 
@@ -1064,14 +946,14 @@ def tradingview_chart(symbol):
     """
 
     html(
-        chart_html,
+        chart,
         height=820,
         scrolling=False
     )
 
 
 # ============================================================
-# SIDEBAR FILTERS
+# SIDEBAR
 # ============================================================
 
 with st.sidebar:
@@ -1082,12 +964,12 @@ with st.sidebar:
 
     st.markdown("---")
 
-    current = st.session_state.settings
+    settings = st.session_state.settings
 
     auto_scan = st.checkbox(
         "Automatic Scanner",
         value=bool(
-            current["auto_scan"]
+            settings["auto_scan"]
         )
     )
 
@@ -1096,7 +978,7 @@ with st.sidebar:
         min_value=10,
         max_value=3600,
         value=int(
-            current["refresh_seconds"]
+            settings["refresh_seconds"]
         ),
         step=10
     )
@@ -1112,7 +994,7 @@ with st.sidebar:
         min_value=0.01,
         max_value=10000.0,
         value=float(
-            current["min_price"]
+            settings["min_price"]
         ),
         step=0.50
     )
@@ -1122,7 +1004,7 @@ with st.sidebar:
         min_value=0.01,
         max_value=10000.0,
         value=float(
-            current["max_price"]
+            settings["max_price"]
         ),
         step=0.50
     )
@@ -1136,7 +1018,7 @@ with st.sidebar:
         min_value=0,
         max_value=1000000000,
         value=int(
-            current["min_volume"]
+            settings["min_volume"]
         ),
         step=100000
     )
@@ -1146,7 +1028,7 @@ with st.sidebar:
         min_value=0.1,
         max_value=1000.0,
         value=float(
-            current["min_rvol"]
+            settings["min_rvol"]
         ),
         step=0.5
     )
@@ -1156,19 +1038,9 @@ with st.sidebar:
         min_value=-100.0,
         max_value=1000.0,
         value=float(
-            current["min_change"]
+            settings["min_change"]
         ),
         step=0.5
-    )
-
-    max_stocks = st.number_input(
-        "Maximum stocks to scan",
-        min_value=10,
-        max_value=2000,
-        value=int(
-            current["max_stocks"]
-        ),
-        step=50
     )
 
     st.markdown(
@@ -1180,16 +1052,16 @@ with st.sidebar:
         min_value=50,
         max_value=100,
         value=int(
-            current["repeat_tolerance"]
+            settings["repeat_tolerance"]
             * 100
         ),
         step=1
     )
 
     st.caption(
-        "Repeat = current 1-minute volume "
-        "is close to the previous highest "
-        "1-minute volume."
+        "90% means the current 1-minute "
+        "volume must reach at least 90% "
+        "of the previous highest 1-minute volume."
     )
 
     st.markdown("---")
@@ -1217,13 +1089,12 @@ with st.sidebar:
             "min_volume": min_volume,
             "min_rvol": min_rvol,
             "min_change": min_change,
-            "max_stocks": max_stocks,
             "repeat_tolerance":
                 repeat_percent / 100,
             "refresh_seconds":
                 refresh_seconds,
             "auto_scan":
-                auto_scan
+                auto_scan,
         }
 
         save_settings(
@@ -1246,67 +1117,46 @@ with st.sidebar:
             "min_volume": min_volume,
             "min_rvol": min_rvol,
             "min_change": min_change,
-            "max_stocks": max_stocks,
             "repeat_tolerance":
                 repeat_percent / 100,
             "refresh_seconds":
                 refresh_seconds,
             "auto_scan":
-                auto_scan
+                auto_scan,
         }
 
         save_settings(
             st.session_state.settings
         )
 
-        try:
+        result = run_scanner()
 
-            with st.spinner(
-                "Scanning US market..."
-            ):
+        st.session_state.scanner_data = result
 
-                result = run_scanner()
+        st.session_state.last_scan = (
+            datetime.now(NY_TZ)
+        )
 
-            st.session_state.scanner_data = result
+        if result.empty:
 
-            st.session_state.last_scan = (
-                datetime.now(NY_TZ)
+            st.warning(
+                "No stocks match your filters."
             )
 
-            st.session_state.scanner_error = None
+        else:
 
-            if result.empty:
-
-                st.warning(
-                    "No stocks matched your filters."
-                )
-
-            else:
-
-                st.success(
-                    f"{len(result)} stocks found."
-                )
-
-        except Exception as e:
-
-            st.session_state.scanner_error = str(e)
-
-            st.error(
-                "Scanner failed."
+            st.success(
+                f"{len(result)} stocks found."
             )
-
-            st.exception(e)
 
 
 # ============================================================
-# TOP BAR
+# TOP HEADER
 # ============================================================
 
-market_open = market_is_open()
+if market_is_open():
 
-if market_open:
-
-    status_html = (
+    market_html = (
         '<span class="market-open">'
         '● US MARKET OPEN'
         '</span>'
@@ -1314,22 +1164,27 @@ if market_open:
 
 else:
 
-    status_html = (
+    market_html = (
         '<span class="market-closed">'
         '● US MARKET CLOSED'
         '</span>'
     )
 
+
 st.markdown(
     f"""
-    <div class="topbar">
+    <div class="top-header">
 
-        <div class="brand">
-            📈 <span>US Momentum</span> Scanner
+        <div class="app-title">
+            📈
+            <span class="app-title-blue">
+                US Momentum
+            </span>
+            Scanner
         </div>
 
-        <div class="market-status">
-            {status_html}
+        <div>
+            {market_html}
         </div>
 
     </div>
@@ -1339,20 +1194,20 @@ st.markdown(
 
 
 # ============================================================
-# MAIN COLUMNS
+# MAIN LAYOUT
 # ============================================================
 
-scanner_col, chart_col = st.columns(
+scanner_column, chart_column = st.columns(
     [35, 65],
     gap="small"
 )
 
 
 # ============================================================
-# LEFT — SCANNER
+# LEFT SCANNER
 # ============================================================
 
-with scanner_col:
+with scanner_column:
 
     data = st.session_state.scanner_data
 
@@ -1362,29 +1217,45 @@ with scanner_col:
         else 0
     )
 
+    # --------------------------------------------------------
+    # Panel header
+    # --------------------------------------------------------
+
     st.markdown(
         f"""
-        <div class="scanner-panel">
+        <div class="panel">
 
-            <div class="scanner-title-row">
+            <div class="panel-header">
 
-                <div class="scanner-title">
+                <div class="panel-title">
                     Momentum Scanner
                 </div>
 
-                <div class="scanner-count">
-                    {count} stocks
+                <div class="panel-subtitle">
+                    {count} results
                 </div>
 
             </div>
 
-            <div class="table-header">
+            <div class="scanner-header">
 
-                <div>Time</div>
-                <div>Symbol</div>
-                <div>LTP</div>
-                <div>Change</div>
-                <div>RVOL</div>
+                <div style="
+                    display:grid;
+                    grid-template-columns:
+                    55px
+                    1fr
+                    72px
+                    82px
+                    65px;
+                ">
+
+                    <div>Time</div>
+                    <div>Symbol</div>
+                    <div>LTP</div>
+                    <div>Change</div>
+                    <div>Rel Vol</div>
+
+                </div>
 
             </div>
 
@@ -1394,22 +1265,23 @@ with scanner_col:
     )
 
     # --------------------------------------------------------
-    # EMPTY STATE
+    # Empty scanner
     # --------------------------------------------------------
 
     if data.empty:
 
         st.markdown(
             """
-            <div class="empty-state">
+            <div class="empty-scanner">
 
-                <div class="empty-state-title">
+                <div class="empty-title">
                     Scanner ready
                 </div>
 
-                Click
-                <b>Scan Now</b>
-                in Filters to start.
+                Open
+                <b>⚙ Filters</b>
+                and click
+                <b>Scan Now</b>.
 
             </div>
             """,
@@ -1417,7 +1289,7 @@ with scanner_col:
         )
 
     # --------------------------------------------------------
-    # STOCK LIST
+    # Stock rows
     # --------------------------------------------------------
 
     else:
@@ -1428,47 +1300,90 @@ with scanner_col:
                 row["Symbol"]
             )
 
-            repeat = bool(
-                row["Repeat"]
-            )
+            # ------------------------------------------------
+            # Five columns
+            # ------------------------------------------------
 
-            change = float(
-                row["% Change"]
-            )
-
-            # -----------------------------------------------
-            # Stock row container
-            # -----------------------------------------------
-
-            row_col1, row_col2 = st.columns(
-                [1.45, 3.55],
+            col_time, col_symbol, col_ltp, col_change, col_rvol = st.columns(
+                [
+                    0.65,
+                    1.45,
+                    0.85,
+                    0.95,
+                    0.75
+                ],
                 gap="small"
             )
 
-            with row_col1:
+            # ------------------------------------------------
+            # Time
+            # ------------------------------------------------
+
+            with col_time:
 
                 st.markdown(
                     f"""
-                    <div class="stock-row">
-
-                        <div class="time-cell">
+                    <div class="scanner-row">
+                        <span class="time-text">
                             {row["Time"]}
-                        </div>
+                        </span>
+                    </div>
+                    """,
+                    unsafe_allow_html=True
+                )
+
+            # ------------------------------------------------
+            # Symbol
+            # ------------------------------------------------
+
+            with col_symbol:
+
+                repeat = bool(
+                    row["Repeat"]
+                )
+
+                if repeat:
+
+                    dot = (
+                        '<span class="repeat-dot">'
+                        '●'
+                        '</span>'
+                    )
+
+                else:
+
+                    dot = (
+                        '<span class="no-repeat-dot">'
+                        '●'
+                        '</span>'
+                    )
+
+                # Button itself
+                clicked = st.button(
+                    symbol,
+                    key=f"symbol_{symbol}_{index}",
+                    use_container_width=True
+                )
+
+                # Dot beside ticker
+                st.markdown(
+                    f"""
+                    <div style="
+                        margin-top:-34px;
+                        height:34px;
+                        display:flex;
+                        align-items:center;
+                        pointer-events:none;
+                    ">
+
+                        {dot}
 
                     </div>
                     """,
                     unsafe_allow_html=True
                 )
 
-            with row_col2:
-
-                ticker_clicked = st.button(
-                    symbol,
-                    key=f"ticker_{symbol}_{index}",
-                    use_container_width=True
-                )
-
-                if ticker_clicked:
+                if clicked:
 
                     st.session_state.selected_ticker = (
                         symbol
@@ -1476,49 +1391,68 @@ with scanner_col:
 
                     st.rerun()
 
-                # Overlay information beside button
+            # ------------------------------------------------
+            # LTP
+            # ------------------------------------------------
+
+            with col_ltp:
+
                 st.markdown(
                     f"""
-                    <div style="
-                        margin-top:-38px;
-                        height:38px;
-                        display:grid;
-                        grid-template-columns:
-                            minmax(80px,1.3fr)
-                            72px
-                            82px
-                            65px;
-                        align-items:center;
-                        pointer-events:none;
-                    ">
-
-                        <div class="symbol-cell">
-
-                            <span class="
-                                repeat-dot
-                                {'empty-dot' if not repeat else ''}
-                            ">
-                                ●
-                            </span>
-
-                        </div>
-
-                        <div class="price-cell">
+                    <div class="scanner-row">
+                        <span class="price-text">
                             ${float(row["LTP"]):.2f}
-                        </div>
+                        </span>
+                    </div>
+                    """,
+                    unsafe_allow_html=True
+                )
 
-                        <div class="
-                            {'change-positive'
-                            if change >= 0
-                            else 'change-negative'}
-                        ">
+            # ------------------------------------------------
+            # Change
+            # ------------------------------------------------
+
+            with col_change:
+
+                change = float(
+                    row["% Change"]
+                )
+
+                if change >= 0:
+
+                    change_class = (
+                        "positive-text"
+                    )
+
+                else:
+
+                    change_class = (
+                        "negative-text"
+                    )
+
+                st.markdown(
+                    f"""
+                    <div class="scanner-row">
+                        <span class="{change_class}">
                             {change:+.2f}%
-                        </div>
+                        </span>
+                    </div>
+                    """,
+                    unsafe_allow_html=True
+                )
 
-                        <div class="rvol-cell">
+            # ------------------------------------------------
+            # Relative volume
+            # ------------------------------------------------
+
+            with col_rvol:
+
+                st.markdown(
+                    f"""
+                    <div class="scanner-row">
+                        <span class="rvol-text">
                             {float(row["Rel Vol"]):.1f}
-                        </div>
-
+                        </span>
                     </div>
                     """,
                     unsafe_allow_html=True
@@ -1526,10 +1460,10 @@ with scanner_col:
 
 
 # ============================================================
-# RIGHT — TRADINGVIEW
+# RIGHT TRADINGVIEW
 # ============================================================
 
-with chart_col:
+with chart_column:
 
     selected = (
         st.session_state.selected_ticker
@@ -1537,15 +1471,26 @@ with chart_col:
 
     st.markdown(
         f"""
-        <div class="chart-panel">
+        <div class="panel">
 
-            <div class="chart-header">
+            <div class="panel-header">
 
-                TradingView
+                <div class="panel-title">
 
-                <span class="chart-symbol">
-                    {selected}
-                </span>
+                    TradingView
+
+                    <span style="
+                        color:#58a6ff;
+                        margin-left:6px;
+                    ">
+                        {selected}
+                    </span>
+
+                </div>
+
+                <div class="panel-subtitle">
+                    1 MIN
+                </div>
 
             </div>
 
@@ -1560,32 +1505,29 @@ with chart_col:
 
 
 # ============================================================
-# FOOTER
+# LAST SCAN
 # ============================================================
 
-last_scan = st.session_state.last_scan
+if st.session_state.last_scan:
 
-if last_scan:
-
-    last_scan_text = (
-        last_scan.strftime(
+    last_scan = (
+        st.session_state.last_scan.strftime(
             "%H:%M:%S"
         )
     )
 
 else:
 
-    last_scan_text = "--"
+    last_scan = "--"
 
 st.markdown(
     f"""
-    <div class="footer">
-        Last scan: {last_scan_text}
+    <div class="last-scan">
+        30-stock universe
         &nbsp; | &nbsp;
-        1-minute scanner
-        &nbsp; | &nbsp;
-        Yahoo Finance
+        Last scan: {last_scan}
     </div>
     """,
     unsafe_allow_html=True
 )
+```
