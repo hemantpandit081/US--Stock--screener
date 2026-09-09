@@ -1,3 +1,4 @@
+```python
 import streamlit as st
 import yfinance as yf
 import pandas as pd
@@ -665,9 +666,6 @@ with st.sidebar:
         use_container_width=True
     ):
 
-        # Change current filters only.
-        # DO NOT save them.
-
         st.session_state.min_price = (
             DEFAULT_SETTINGS["min_price"]
         )
@@ -804,7 +802,7 @@ with scanner_col:
                 )
 
         # ----------------------------------------------------
-        # SORT
+        # SORT BY RELATIVE VOLUME
         # ----------------------------------------------------
 
         filtered = sorted(
@@ -894,7 +892,6 @@ with scanner_col:
                 f"{row['% Change']:.2f}%"
             )
 
-            # Rel Vol number only
             c5.write(
                 f"{row['Rel Vol']:.1f}"
             )
@@ -954,110 +951,145 @@ with chart_col:
             f"NASDAQ:{selected}"
         )
 
-    # --------------------------------------------------------
-    # LARGE CHART
-    # --------------------------------------------------------
-
-    chart_height = 850
-
-    # --------------------------------------------------------
-    # TRADINGVIEW HTML
-    # --------------------------------------------------------
+    # ========================================================
+    # SQUARE TRADINGVIEW CHART
+    # ========================================================
 
     tradingview_html = f"""
 
-    <div
-        class="tradingview-widget-container"
-        style="
-            height:100%;
-            width:100%;
-        "
-    >
+    <style>
 
-        <div
-            class="tradingview-widget-container__widget"
-            style="
-                height:calc(100% - 32px);
-                width:100%;
-            "
-        ></div>
-
-        <div
-            class="tradingview-widget-copyright"
-        >
-
-            <a
-                href="https://www.tradingview.com/"
-                rel="noopener nofollow"
-                target="_blank"
-            >
-                TradingView
-            </a>
-
-        </div>
-
-        <script
-            type="text/javascript"
-            src="https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js"
-            async
-        >
-
-        {{
-            "autosize": true,
-
-            "symbol": "{tv_symbol}",
-
-            "interval": "5",
-
-            "timezone":
-                "America/New_York",
-
-            "theme": "dark",
-
-            "style": "1",
-
-            "locale": "en",
-
-            "enable_publishing": false,
-
-            "allow_symbol_change": true,
-
-            "hide_top_toolbar": false,
-
-            "hide_side_toolbar": false,
-
-            "withdateranges": true,
-
-            "hide_volume": false,
-
-            "save_image": true,
-
-            "studies": [],
-
-            "show_popup_button": true,
-
-            "popup_width": "1000",
-
-            "popup_height": "850",
-
-            "calendar": false,
-
-            "details": false,
-
-            "hotlist": false,
-
-            "support_host":
-                "https://www.tradingview.com"
+        html,
+        body {{
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
         }}
 
-        </script>
+        .tv-square {{
+            width: 100%;
+            aspect-ratio: 1 / 1;
+            position: relative;
+            overflow: hidden;
+        }}
+
+        .tradingview-widget-container {{
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+        }}
+
+        .tradingview-widget-container__widget {{
+            width: 100%;
+            height: calc(100% - 32px);
+        }}
+
+        .tradingview-widget-copyright {{
+            height: 32px;
+            line-height: 32px;
+        }}
+
+    </style>
+
+
+    <div class="tv-square">
+
+        <div
+            class="tradingview-widget-container"
+        >
+
+            <div
+                class="tradingview-widget-container__widget"
+            ></div>
+
+            <div
+                class="tradingview-widget-copyright"
+            >
+
+                <a
+                    href="https://www.tradingview.com/"
+                    rel="noopener nofollow"
+                    target="_blank"
+                >
+                    TradingView
+                </a>
+
+            </div>
+
+
+            <script
+                type="text/javascript"
+                src="https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js"
+                async
+            >
+
+            {{
+                "autosize": true,
+
+                "symbol": "{tv_symbol}",
+
+                "interval": "5",
+
+                "timezone":
+                    "America/New_York",
+
+                "theme": "dark",
+
+                "style": "1",
+
+                "locale": "en",
+
+                "enable_publishing": false,
+
+                "allow_symbol_change": true,
+
+                "hide_top_toolbar": false,
+
+                "hide_side_toolbar": false,
+
+                "withdateranges": true,
+
+                "hide_volume": false,
+
+                "save_image": true,
+
+                "studies": [],
+
+                "show_popup_button": true,
+
+                "popup_width": "1000",
+
+                "popup_height": "850",
+
+                "calendar": false,
+
+                "details": false,
+
+                "hotlist": false,
+
+                "support_host":
+                    "https://www.tradingview.com"
+            }}
+
+            </script>
+
+        </div>
 
     </div>
 
     """
 
+    # --------------------------------------------------------
+    # Streamlit iframe height
+    # --------------------------------------------------------
+
     components.html(
         tradingview_html,
-        height=chart_height,
+        height=900,
         scrolling=False
     )
+```
