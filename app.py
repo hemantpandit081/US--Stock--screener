@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import yfinance as yf
+import streamlit.components.v1 as components
 from datetime import datetime
 from zoneinfo import ZoneInfo
 import time
@@ -392,85 +393,112 @@ if (
 df = st.session_state.scanner_data
 
 
-# --------------------------------------------------
 # APPLY FILTERS
-# --------------------------------------------------
 
-if not df.empty:
+filtered = results.copy()
 
-    filtered = df[
-        (df["Price"] >= min_price)
-        & (df["Price"] <= max_price)
-        & (df["Volume"] >= min_volume)
-        & (df["RVOL"] >= min_rvol)
-        & (df["Change %"] >= min_change)
-    ].copy()
+if not filtered.empty:
+    filtered = filtered[
+        (filtered["Price"] >= min_price) &
+        (filtered["Price"] <= max_price) &
+        (filtered["Volume"] >= min_volume) &
+        (filtered["RVOL"] >= min_rvol) &
+        (filtered["Change %"] >= min_change)
+    ]
 
-    # Sort by RVOL
-    filtered = filtered.sort_values(
-        "RVOL",
-        ascending=False
-    )
+# Sort by RVOL
+if not filtered.empty:
+    filtered = filtered.sort_values("RVOL", ascending=False)
 
-    # --------------------------------------------------
-    # DISPLAY
-    # --------------------------------------------------
 
-    st.subheader(
-        f"📊 Stocks Found: {len(filtered)}"
-    )
+# =========================
+# SCANNER + TRADINGVIEW
+# =========================
 
-    if not filtered.empty:
+scanner_col, chart_col = st.columns([40, 60])
 
-        display_df = filtered.copy()
 
-        display_df["Price"] = display_df[
-            "Price"
-        ].map(lambda x: f"${x:.2f}")
+# -------------------------
+# LEFT SIDE - SCANNER
+# -------------------------
 
-        display_df["Change %"] = display_df[
-            "Change %"
-        ].map(lambda x: f"{x:.2f}%")
+with scanner_col:
 
-        display_df["Volume"] = display_df[
-            "Volume"
-        ].map(lambda x: f"{x:,}")
+    st.subheader("📊 Stock Scanner")
 
-        display_df["RVOL"] = display_df[
-            "RVOL"
-        ].map(lambda x: f"{x:.2f}x")
+    if filtered.empty:
+
+        st.warning("No stocks match your filters.")
+
+    else:
 
         st.dataframe(
-            display_df,
+            filtered,
             use_container_width=True,
             hide_index=True
         )
 
-    else:
-
-        st.warning(
-            "No stocks match your current filters."
+        # Select stock
+        selected_ticker = st.selectbox(
+            "Select stock for chart",
+            filtered["Ticker"].tolist()
         )
 
-else:
 
-    st.warning(
-        "No market data was returned."
-    )
+# -------------------------
+# RIGHT SIDE - TRADINGVIEW
+# -------------------------
+
+with chart_col:
+
+    st.subheader("📈 TradingView Chart")
+
+    if not filtered.empty:
+
+        tradingview_html = f"""
+        <div id="tradingview_chart"
+             style="width:100%; height:700px;">
+        </div>
+
+        <script
+            type="text/javascript"
+            src="https://s3.tradingview.com/tv.js">
+        </script>
+
+        <script type="text/javascript">
+
+        new TradingView.widget({{
+            "width": "100%",
+            "height": 700,
+            "symbol": "NASDAQ:{selected_ticker}",
+            "interval": "5",
+            "timezone": "America/New_York",
+            "theme": "dark",
+            "style": "1",
+            "locale": "en",
+            "toolbar_bg": "#1e1e1e",
+            "enable_publishing": false,
+            "hide_top_toolbar": false,
+            "hide_legend": false,
+            "save_image": false,
+            "container_id": "tradingview_chart"
+        }});
+
+        </script>
+        """
+
+        components.html(
+            tradingview_html,
+            height=720
+        )
 
 
-# --------------------------------------------------
+# =========================
 # AUTO REFRESH
-# --------------------------------------------------
+# =========================
 
-st.caption(
-    f"Scanner refresh interval: {refresh_seconds} seconds"
-)
+if auto_refresh:
 
-time.sleep(refresh_seconds)
+    time.sleep(refresh_seconds)
 
-st.rerun()
-
-
-
-
+    st.rerun()
