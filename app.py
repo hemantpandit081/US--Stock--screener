@@ -26,7 +26,19 @@ st.title("🇺🇸 US Stock Momentum Scanner")
 # --------------------------------------------------
 
 @st.cache_data(ttl=300)
+@st.cache_data(ttl=300)
 def get_stock_universe():
+
+    stocks = [
+        "AAPL", "NVDA", "TSLA", "AMD", "AMZN",
+        "META", "MSFT", "GOOGL", "NFLX", "PLTR",
+        "MSTR", "COIN", "SMCI", "SOFI", "NIO",
+        "RIVN", "LCID", "MARA", "RIOT", "IONQ",
+        "BBAI", "SOUN", "AI", "HOOD", "RKLB",
+        "GME", "AMC", "BB", "OPEN", "FFIE"
+    ]
+
+    return stocks
 
     try:
         query = yf.EquityQuery(
@@ -380,15 +392,12 @@ if (
 
     with st.spinner("🔎 Finding active US stocks..."):
 
-        stocks = get_stock_universe()
+      stocks = get_stock_universe()
 
-        if stocks:
-
-            st.session_state.scanner_data = run_scanner()
-
-        else:
-
-            st.session_state.scanner_data = pd.DataFrame()
+if stocks:
+    st.session_state.scanner_data = run_scanner(stocks)
+else:
+    st.session_state.scanner_data = pd.DataFrame()
 
 df = st.session_state.scanner_data
 
