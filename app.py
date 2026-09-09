@@ -366,8 +366,7 @@ if not filtered.empty:
 # LEFT AND RIGHT
 # ============================================================
 
-scanner_col, chart_col = st.columns(
-    [45, 55],
+scanner_col, chart_col = st.columns([40, 60], gap="small"),
     gap="medium"
 )
 
@@ -375,110 +374,49 @@ scanner_col, chart_col = st.columns(
 # ============================================================
 # LEFT SIDE — SCANNER
 # ============================================================
-
 with scanner_col:
 
     st.subheader("📊 Stock Scanner")
 
     if filtered.empty:
 
-        st.warning(
-            "No stocks match your filters."
-        )
-
-        st.info(
-            "Try lowering RVOL or Change %."
-        )
+        st.warning("No stocks match your filters.")
 
     else:
 
-        display_df = filtered[
-            [
-                "Time",
-                "Symbol",
-                "LTP",
-                "% Change",
-                "Rel Vol"
-            ]
-        ].copy()
-
-        # CLICKABLE TABLE
-        event = st.dataframe(
-
-            display_df,
-
-            use_container_width=True,
-
-            hide_index=True,
-
-            height=700,
-
-            selection_mode="single-row",
-
-            on_select="rerun",
-
-            key="scanner_table",
-
-            column_config={
-
-                "Time": st.column_config.TextColumn(
-                    "Time"
-                ),
-
-                "Symbol": st.column_config.TextColumn(
-                    "Symbol"
-                ),
-
-                "LTP": st.column_config.NumberColumn(
-                    "LTP",
-                    format="%.2f"
-                ),
-
-                "% Change": st.column_config.NumberColumn(
-                    "% Change",
-                    format="%.2f"
-                ),
-
-                "Rel Vol": st.column_config.NumberColumn(
-                    "Rel Vol",
-                    format="%.2f"
-                )
-            }
+        # Header
+        h1, h2, h3, h4, h5 = st.columns(
+            [1.3, 1.2, 1.2, 1.2, 1.2]
         )
 
-        # CHECK WHICH ROW WAS CLICKED
+        h1.write("Time")
+        h2.write("Symbol")
+        h3.write("LTP")
+        h4.write("% Change")
+        h5.write("Rel Vol")
 
-        if event.selection.rows:
+        # Stock rows
+        for _, row in filtered.iterrows():
 
-            row_number = event.selection.rows[0]
-
-            clicked_stock = display_df.iloc[
-                row_number
-            ]["Symbol"]
-
-            st.session_state.selected_ticker = (
-                clicked_stock
+            c1, c2, c3, c4, c5 = st.columns(
+                [1.3, 1.2, 1.2, 1.2, 1.2]
             )
 
+            c1.write(row["Time"])
 
-# ============================================================
-# DEFAULT STOCK
-# ============================================================
+            if c2.button(
+                row["Ticker"],
+                key=f"stock_{row['Ticker']}",
+                use_container_width=True
+            ):
+                st.session_state.selected_ticker = row["Ticker"]
+                st.rerun()
 
-if (
-    st.session_state.selected_ticker is None
-    and not filtered.empty
-):
+            c3.write(f"${row['Price']:.2f}")
 
-    st.session_state.selected_ticker = (
-        filtered.iloc[0]["Symbol"]
-    )
+            c4.write(f"{row['Change %']:.2f}%")
 
-# ============================================================
-# RIGHT SIDE — TRADINGVIEW
-# ============================================================
-
-with chart_col:
+            c5.write(f"{row['RVOL']:.2f}")
 
     st.subheader("📈 TradingView Chart")
 
