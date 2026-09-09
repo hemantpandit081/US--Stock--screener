@@ -5,6 +5,7 @@ import numpy as np
 import requests
 from datetime import datetime, time
 from zoneinfo import ZoneInfo
+from io import StringIO
 import streamlit.components.v1 as components
 
 
@@ -29,8 +30,8 @@ st.markdown(
     <style>
 
     .block-container {
-        padding-top: 0.25rem;
-        padding-bottom: 0.25rem;
+        padding-top: 0.20rem;
+        padding-bottom: 0.20rem;
         padding-left: 0.30rem;
         padding-right: 0.30rem;
     }
@@ -53,8 +54,8 @@ st.markdown(
         margin-bottom: 8px;
     }
 
-    .repeat-square {
-        font-size: 17px;
+    .repeat-dot {
+        font-size: 13px;
         font-weight: 900;
         color: white;
         line-height: 1;
@@ -98,6 +99,12 @@ st.markdown(
         min-height: 30px;
     }
 
+    .scan-status {
+        font-size: 11px;
+        color: #999999;
+        margin-bottom: 5px;
+    }
+
     </style>
     """,
     unsafe_allow_html=True
@@ -114,7 +121,11 @@ DEFAULT_SETTINGS = {
     "min_volume": 100000,
     "min_rvol": 2.0,
     "min_change": 2.0,
+
+    # Maximum number of stocks DISPLAYED
+    # Not the number of stocks scanned
     "max_stocks": 300,
+
     "repeat_tolerance": 90,
     "refresh_seconds": 60,
     "auto_scanner": True,
@@ -136,6 +147,12 @@ if "selected_symbol" not in st.session_state:
 
 if "last_scan_time" not in st.session_state:
     st.session_state.last_scan_time = None
+
+if "scan_status" not in st.session_state:
+    st.session_state.scan_status = ""
+
+if "scan_diagnostics" not in st.session_state:
+    st.session_state.scan_diagnostics = {}
 
 
 # ============================================================
@@ -211,6 +228,11 @@ def load_settings():
         min_rvol
     )
 
+    min_change = max(
+        0.0,
+        min_change
+    )
+
     max_stocks = max(
         1,
         max_stocks
@@ -278,14 +300,14 @@ def load_russell_2000():
 
             for i, line in enumerate(lines):
 
-                if "Ticker" in line and "Name" in line:
-
+                if (
+                    "Ticker" in line
+                    and "Name" in line
+                ):
                     start = i
                     break
 
             if start is not None:
-
-                from io import StringIO
 
                 csv_text = "\n".join(
                     lines[start:]
@@ -325,173 +347,70 @@ def load_russell_2000():
                         if not symbol:
                             continue
 
-                        if symbol == "nan":
+                        if symbol.lower() == "nan":
                             continue
 
+                        # Yahoo Finance uses '-' instead
+                        # of '.' for some symbols.
                         if "." in symbol:
                             continue
 
-                        cleaned.append(symbol)
+                        if symbol.upper() == "CASH":
+                            continue
+
+                        cleaned.append(
+                            symbol.upper()
+                        )
+
+                    cleaned = list(
+                        dict.fromkeys(cleaned)
+                    )
 
                     if len(cleaned) > 100:
 
-                        return list(
-                            dict.fromkeys(cleaned)
-                        )
+                        return cleaned
 
-    except Exception:
-        pass
+    except Exception as e:
+
+        st.session_state.scan_status = (
+            f"Russell 2000 download problem: {e}"
+        )
 
 
-    # --------------------------------------------------------
-    # FALLBACK SYMBOLS
-    # --------------------------------------------------------
+    # ========================================================
+    # FALLBACK UNIVERSE
+    # ========================================================
 
     return [
-        "AAL",
-        "AAOI",
-        "ABCL",
-        "ABEO",
-        "ACHR",
-        "ACMR",
-        "ADMA",
-        "AEHR",
-        "AI",
-        "AKBA",
-        "ALLO",
-        "AMRX",
-        "APLD",
-        "APPS",
-        "ARLO",
-        "ARQQ",
-        "ARRY",
-        "ASTS",
-        "ATNF",
-        "ATOS",
-        "AUR",
-        "BBAI",
-        "BBIO",
-        "BCRX",
-        "BE",
-        "BILI",
-        "BITF",
-        "BLBD",
-        "BLDE",
-        "BMBL",
-        "BMRN",
-        "BNGO",
-        "BTBT",
-        "BTDR",
-        "CABA",
-        "CAN",
-        "CARG",
-        "CDE",
-        "CELH",
-        "CHPT",
-        "CLSK",
-        "CMRX",
-        "COIN",
-        "COMM",
-        "CRDO",
-        "CRK",
-        "CRNC",
-        "CRSP",
-        "CVNA",
-        "CYTK",
-        "DAVE",
-        "DNA",
-        "DNN",
-        "DOCS",
-        "DLO",
-        "EDIT",
-        "ENVX",
-        "EOSE",
-        "EVGO",
-        "EXAS",
-        "FATE",
-        "FCEL",
-        "FOLD",
-        "FUBO",
-        "GCT",
-        "GDRX",
-        "GEVO",
-        "GME",
-        "GOEV",
-        "GOSS",
-        "GRAB",
-        "HIMS",
-        "HIVE",
-        "HOOD",
-        "IONQ",
-        "JOBY",
-        "LCID",
-        "LUMN",
-        "LUNR",
-        "MARA",
-        "MAXN",
-        "MCRB",
-        "MGNI",
-        "MNMD",
-        "MPLN",
-        "MVIS",
-        "NEGG",
-        "NIO",
-        "NKLA",
-        "NNDM",
-        "NU",
-        "NVAX",
-        "OCGN",
-        "OPEN",
-        "OPRX",
-        "ORGN",
-        "PACB",
-        "PAGS",
-        "PLTR",
-        "PLUG",
-        "POET",
-        "PRCH",
-        "PRME",
-        "PSNY",
-        "PTON",
-        "QBTS",
-        "QUBT",
-        "RANI",
-        "RDFN",
-        "REKR",
-        "RIOT",
-        "RKLB",
-        "RIVN",
-        "ROIV",
-        "RXRX",
-        "SENS",
-        "SERV",
-        "SIRI",
-        "SLDP",
-        "SLNO",
-        "SOUN",
-        "SPCE",
-        "SST",
-        "STNE",
-        "TELL",
-        "TMC",
-        "TMDX",
-        "TOST",
-        "TQQQ",
-        "TRIB",
-        "TSLA",
-        "TUP",
-        "TWST",
-        "UAL",
-        "UPST",
-        "URG",
-        "VERU",
-        "VKTX",
-        "VRDN",
-        "WBD",
-        "WKHS",
-        "WOLF",
-        "XPEV",
-        "ZIM"
+        "AAL", "AAOI", "ABCL", "ABEO", "ACHR",
+        "ACMR", "ADMA", "AEHR", "AI", "AKBA",
+        "ALLO", "AMRX", "APLD", "APPS", "ARLO",
+        "ARQQ", "ARRY", "ASTS", "ATNF", "ATOS",
+        "AUR", "BBAI", "BBIO", "BCRX", "BE",
+        "BILI", "BITF", "BLBD", "BLDE", "BMBL",
+        "BMRN", "BNGO", "BTBT", "BTDR", "CABA",
+        "CAN", "CARG", "CDE", "CELH", "CHPT",
+        "CLSK", "CMRX", "COIN", "COMM", "CRDO",
+        "CRK", "CRNC", "CRSP", "CVNA", "CYTK",
+        "DAVE", "DNA", "DNN", "DOCS", "DLO",
+        "EDIT", "ENVX", "EOSE", "EVGO", "EXAS",
+        "FATE", "FCEL", "FOLD", "FUBO", "GCT",
+        "GDRX", "GEVO", "GME", "GOEV", "GOSS",
+        "GRAB", "HIMS", "HIVE", "HOOD", "IONQ",
+        "JOBY", "LCID", "LUMN", "LUNR", "MARA",
+        "MAXN", "MCRB", "MGNI", "MNMD", "MPLN",
+        "MVIS", "NEGG", "NIO", "NKLA", "NNDM",
+        "NU", "NVAX", "OCGN", "OPEN", "OPRX",
+        "ORGN", "PACB", "PAGS", "PLTR", "PLUG",
+        "POET", "PRCH", "PRME", "PSNY", "PTON",
+        "QBTS", "QUBT", "RANI", "RDFN", "REKR",
+        "RIOT", "RKLB", "RIVN", "ROIV", "RXRX",
+        "SENS", "SERV", "SIRI", "SLDP", "SLNO",
+        "SOUN", "SPCE", "SST", "STNE", "TELL",
+        "TMC", "TMDX", "TOST", "TQQQ", "TRIB",
+        "TSLA", "TUP", "TWST", "UAL", "UPST",
+        "URG", "VERU", "VKTX", "VRDN", "WBD",
+        "WKHS", "WOLF", "XPEV", "ZIM"
     ]
 
 
@@ -512,7 +431,6 @@ def get_symbol_data(df, symbol):
         ):
 
             level0 = df.columns.get_level_values(0)
-
             level1 = df.columns.get_level_values(1)
 
             if symbol in level0:
@@ -606,8 +524,24 @@ def scan_batch(
 
     results = []
 
+    diagnostics = {
+        "downloaded": 0,
+        "valid_price": 0,
+        "volume_pass": 0,
+        "change_pass": 0,
+        "rvol_pass": 0,
+        "final": 0,
+        "errors": 0,
+    }
+
     if not symbols:
-        return results
+
+        return results, diagnostics
+
+
+    # ========================================================
+    # INTRADAY DATA
+    # ========================================================
 
     try:
 
@@ -626,6 +560,10 @@ def scan_batch(
 
         intraday = None
 
+
+    # ========================================================
+    # DAILY DATA
+    # ========================================================
 
     try:
 
@@ -646,11 +584,19 @@ def scan_batch(
 
 
     if intraday is None:
-        return results
+
+        diagnostics["errors"] += 1
+
+        return results, diagnostics
 
     if intraday.empty:
-        return results
 
+        return results, diagnostics
+
+
+    # ========================================================
+    # PROCESS EACH STOCK
+    # ========================================================
 
     for symbol in symbols:
 
@@ -680,7 +626,7 @@ def scan_batch(
 
 
             # ------------------------------------------------
-            # CLEAN DATA
+            # CLEAN
             # ------------------------------------------------
 
             intra_df = intra_df.copy()
@@ -703,6 +649,9 @@ def scan_batch(
                 continue
 
 
+            diagnostics["downloaded"] += 1
+
+
             # ------------------------------------------------
             # LTP
             # ------------------------------------------------
@@ -716,7 +665,7 @@ def scan_batch(
 
 
             # ------------------------------------------------
-            # PRICE FILTER
+            # PRICE
             # ------------------------------------------------
 
             if ltp < settings["min_price"]:
@@ -724,6 +673,8 @@ def scan_batch(
 
             if ltp > settings["max_price"]:
                 continue
+
+            diagnostics["valid_price"] += 1
 
 
             # ------------------------------------------------
@@ -738,6 +689,8 @@ def scan_batch(
 
             if session_volume < settings["min_volume"]:
                 continue
+
+            diagnostics["volume_pass"] += 1
 
 
             # ------------------------------------------------
@@ -771,7 +724,7 @@ def scan_batch(
 
 
             # ------------------------------------------------
-            # % CHANGE
+            # PERCENT CHANGE
             # ------------------------------------------------
 
             percent_change = (
@@ -788,6 +741,8 @@ def scan_batch(
                 < settings["min_change"]
             ):
                 continue
+
+            diagnostics["change_pass"] += 1
 
 
             # ------------------------------------------------
@@ -830,6 +785,8 @@ def scan_batch(
 
             if rvol < settings["min_rvol"]:
                 continue
+
+            diagnostics["rvol_pass"] += 1
 
 
             # ------------------------------------------------
@@ -874,7 +831,7 @@ def scan_batch(
 
 
             # ------------------------------------------------
-            # ADD RESULT
+            # RESULT
             # ------------------------------------------------
 
             results.append(
@@ -891,10 +848,13 @@ def scan_batch(
 
         except Exception:
 
+            diagnostics["errors"] += 1
             continue
 
 
-    return results
+    diagnostics["final"] = len(results)
+
+    return results, diagnostics
 
 
 # ============================================================
@@ -905,13 +865,34 @@ def run_scanner():
 
     settings = load_settings()
 
+    # IMPORTANT:
+    # Scan the complete universe.
+    # max_stocks controls DISPLAYED results only.
+
     symbols = load_russell_2000()
 
-    symbols = symbols[
-        :settings["max_stocks"]
-    ]
+    total_symbols = len(symbols)
+
+    st.session_state.scan_status = (
+        f"Scanning {total_symbols:,} stocks..."
+    )
 
     all_results = []
+
+    total_diagnostics = {
+        "downloaded": 0,
+        "valid_price": 0,
+        "volume_pass": 0,
+        "change_pass": 0,
+        "rvol_pass": 0,
+        "final": 0,
+        "errors": 0,
+    }
+
+
+    # ========================================================
+    # BATCHES
+    # ========================================================
 
     batch_size = 50
 
@@ -925,7 +906,7 @@ def run_scanner():
             start:start + batch_size
         ]
 
-        batch_results = scan_batch(
+        batch_results, batch_diag = scan_batch(
             batch,
             settings
         )
@@ -934,6 +915,16 @@ def run_scanner():
             batch_results
         )
 
+        for key in total_diagnostics:
+
+            total_diagnostics[key] += (
+                batch_diag.get(key, 0)
+            )
+
+
+    # ========================================================
+    # CREATE DATAFRAME
+    # ========================================================
 
     if all_results:
 
@@ -958,6 +949,12 @@ def run_scanner():
             drop=True
         )
 
+        # IMPORTANT:
+        # Only limit displayed results here.
+        df = df.head(
+            settings["max_stocks"]
+        )
+
     else:
 
         df = pd.DataFrame(
@@ -973,10 +970,23 @@ def run_scanner():
         )
 
 
+    # ========================================================
+    # SAVE RESULTS
+    # ========================================================
+
     st.session_state.scan_results = df
+
+    st.session_state.scan_diagnostics = (
+        total_diagnostics
+    )
 
     st.session_state.last_scan_time = datetime.now(
         ZoneInfo("America/New_York")
+    )
+
+    st.session_state.scan_status = (
+        f"Scan complete — "
+        f"{len(df)} stocks found"
     )
 
 
@@ -990,9 +1000,6 @@ def show_tradingview(symbol):
         symbol
     ).upper().strip()
 
-    # TradingView Advanced Chart
-    # 1-minute candles
-    # Drawing toolbar enabled
 
     html = f"""
     <!DOCTYPE html>
@@ -1026,9 +1033,7 @@ def show_tradingview(symbol):
 
     <body>
 
-        <div
-            id="tv_chart"
-        ></div>
+        <div id="tv_chart"></div>
 
         <script
             type="text/javascript"
@@ -1077,7 +1082,8 @@ def show_tradingview(symbol):
 
                 "studies": [],
 
-                "support_host": "https://www.tradingview.com"
+                "support_host":
+                    "https://www.tradingview.com"
 
             }});
 
@@ -1087,6 +1093,7 @@ def show_tradingview(symbol):
 
     </html>
     """
+
 
     components.html(
         html,
@@ -1139,6 +1146,7 @@ def show_filters():
             "### Scanner Filters"
         )
 
+
         col1, col2 = st.columns(2)
 
 
@@ -1154,6 +1162,7 @@ def show_filters():
                 format="%.2f"
             )
 
+
             max_price = st.number_input(
                 "Max price",
                 min_value=0.01,
@@ -1164,6 +1173,7 @@ def show_filters():
                 format="%.2f"
             )
 
+
             min_volume = st.number_input(
                 "Min volume",
                 min_value=0,
@@ -1172,6 +1182,7 @@ def show_filters():
                 ),
                 step=10000
             )
+
 
             min_rvol = st.number_input(
                 "Min Rel Vol",
@@ -1188,6 +1199,7 @@ def show_filters():
 
             min_change = st.number_input(
                 "Min % change",
+                min_value=0.0,
                 value=float(
                     current["min_change"]
                 ),
@@ -1195,14 +1207,16 @@ def show_filters():
                 format="%.1f"
             )
 
+
             max_stocks = st.number_input(
-                "Max stocks",
+                "Max stocks to display",
                 min_value=1,
                 value=int(
                     current["max_stocks"]
                 ),
                 step=50
             )
+
 
             repeat_tolerance = st.number_input(
                 "Repeat tolerance %",
@@ -1214,6 +1228,7 @@ def show_filters():
                 step=1.0,
                 format="%.0f"
             )
+
 
             refresh_seconds = st.number_input(
                 "Refresh seconds",
@@ -1239,23 +1254,94 @@ def show_filters():
         ):
 
             st.session_state.settings = {
+
                 "min_price": min_price,
+
                 "max_price": max(
                     min_price,
                     max_price
                 ),
+
                 "min_volume": min_volume,
+
                 "min_rvol": min_rvol,
+
                 "min_change": min_change,
+
                 "max_stocks": max_stocks,
-                "repeat_tolerance": repeat_tolerance,
-                "refresh_seconds": refresh_seconds,
-                "auto_scanner": auto_scanner,
+
+                "repeat_tolerance":
+                    repeat_tolerance,
+
+                "refresh_seconds":
+                    refresh_seconds,
+
+                "auto_scanner":
+                    auto_scanner,
             }
 
             st.session_state.scan_results = None
 
             st.rerun()
+
+
+# ============================================================
+# DIAGNOSTICS
+# ============================================================
+
+def show_diagnostics():
+
+    diagnostics = (
+        st.session_state
+        .get(
+            "scan_diagnostics",
+            {}
+        )
+    )
+
+    if not diagnostics:
+        return
+
+
+    with st.expander(
+        "Scan diagnostics",
+        expanded=False
+    ):
+
+        st.write(
+            f"Stocks with data: "
+            f"{diagnostics.get('downloaded', 0):,}"
+        )
+
+        st.write(
+            f"Passed price filter: "
+            f"{diagnostics.get('valid_price', 0):,}"
+        )
+
+        st.write(
+            f"Passed volume filter: "
+            f"{diagnostics.get('volume_pass', 0):,}"
+        )
+
+        st.write(
+            f"Passed % change filter: "
+            f"{diagnostics.get('change_pass', 0):,}"
+        )
+
+        st.write(
+            f"Passed Rel Vol filter: "
+            f"{diagnostics.get('rvol_pass', 0):,}"
+        )
+
+        st.write(
+            f"Final results: "
+            f"{diagnostics.get('final', 0):,}"
+        )
+
+        st.write(
+            f"Download/process errors: "
+            f"{diagnostics.get('errors', 0):,}"
+        )
 
 
 # ============================================================
@@ -1275,6 +1361,26 @@ def display_scanner():
     )
 
 
+    # --------------------------------------------------------
+    # STATUS
+    # --------------------------------------------------------
+
+    if st.session_state.get(
+        "scan_status"
+    ):
+
+        st.markdown(
+            f'<div class="scan-status">'
+            f'{st.session_state.scan_status}'
+            f'</div>',
+            unsafe_allow_html=True
+        )
+
+
+    # --------------------------------------------------------
+    # NO SCAN YET
+    # --------------------------------------------------------
+
     if df is None:
 
         st.info(
@@ -1284,11 +1390,17 @@ def display_scanner():
         return
 
 
+    # --------------------------------------------------------
+    # NO RESULTS
+    # --------------------------------------------------------
+
     if df.empty:
 
         st.warning(
             "No stocks match the current filters."
         )
+
+        show_diagnostics()
 
         return
 
@@ -1306,6 +1418,7 @@ def display_scanner():
             0.65
         ]
     )
+
 
     for col, text in zip(
         header,
@@ -1357,7 +1470,7 @@ def display_scanner():
 
 
         # ----------------------------------------------------
-        # SYMBOL
+        # SYMBOL + REPEAT DOT
         # ----------------------------------------------------
 
         with cols[1]:
@@ -1374,7 +1487,11 @@ def display_scanner():
 
                 if st.button(
                     str(row["Symbol"]),
-                    key=f"symbol_{index}_{row['Symbol']}",
+                    key=(
+                        f"symbol_"
+                        f"{index}_"
+                        f"{row['Symbol']}"
+                    ),
                     use_container_width=True
                 ):
 
@@ -1395,8 +1512,8 @@ def display_scanner():
                 ):
 
                     st.markdown(
-                        '<div class="repeat-square">'
-                        '■'
+                        '<div class="repeat-dot">'
+                        '●'
                         '</div>',
                         unsafe_allow_html=True
                     )
@@ -1475,7 +1592,9 @@ with top2:
         )
 
         st.caption(
-            f"Last scan: {scan_time} New York time"
+            f"Last scan: "
+            f"{scan_time} "
+            f"New York time"
         )
 
 
@@ -1518,13 +1637,8 @@ if scan_now:
 # ============================================================
 # MAIN SCREEN
 #
-# IMPORTANT:
-#
-# Scanner = 35%
-# TradingView = 65%
-#
-# TradingView is NOT inside the auto-refresh fragment.
-# This prevents the chart from disappearing during scans.
+# LEFT  = 35%
+# RIGHT = 65%
 # ============================================================
 
 scanner_col, chart_col = st.columns(
@@ -1537,16 +1651,61 @@ scanner_col, chart_col = st.columns(
 
 
 # ============================================================
-# LEFT SCANNER
+# AUTO SCANNER + LEFT SCANNER
+#
+# IMPORTANT:
+# The scanner DISPLAY is inside the fragment.
+# The TradingView chart is OUTSIDE the fragment.
 # ============================================================
 
 with scanner_col:
 
-    display_scanner()
+    settings = load_settings()
+
+
+    if settings["auto_scanner"]:
+
+        try:
+
+            @st.fragment(
+                run_every=int(
+                    settings["refresh_seconds"]
+                )
+            )
+            def automatic_scan():
+
+                # Only scan during regular market hours
+                if regular_market_hours():
+
+                    try:
+
+                        run_scanner()
+
+                    except Exception as e:
+
+                        st.session_state.scan_status = (
+                            f"Scanner error: {e}"
+                        )
+
+                display_scanner()
+
+
+            automatic_scan()
+
+        except Exception:
+
+            # Fallback if fragment is unavailable
+            display_scanner()
+
+    else:
+
+        display_scanner()
 
 
 # ============================================================
 # RIGHT TRADINGVIEW
+#
+# NOT INSIDE FRAGMENT
 # ============================================================
 
 with chart_col:
@@ -1581,42 +1740,4 @@ with chart_col:
             """,
             unsafe_allow_html=True
         )
-
-
-# ============================================================
-# AUTO SCANNER
-#
-# The scanner refreshes using Streamlit fragment.
-# TradingView is deliberately outside this fragment.
-# ============================================================
-
-settings = load_settings()
-
-
-if settings["auto_scanner"]:
-
-    try:
-
-        @st.fragment(
-            run_every=int(
-                settings["refresh_seconds"]
-            )
-        )
-        def automatic_scan():
-
-            if regular_market_hours():
-
-                try:
-
-                    run_scanner()
-
-                except Exception:
-
-                    pass
-
-
-        automatic_scan()
-
-    except Exception:
-
-        pass
+        
