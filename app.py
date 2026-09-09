@@ -19,46 +19,69 @@ st.set_page_config(
 
 
 # ============================================================
-# SCREEN / LAYOUT CSS
+# COMPACT SCREEN-FIT CSS
 # ============================================================
 
 st.markdown(
     """
     <style>
 
+    /* Remove Streamlit page spacing */
     .block-container {
-        padding-top: 0.4rem;
-        padding-bottom: 0.4rem;
-        padding-left: 0.6rem;
-        padding-right: 0.6rem;
+        padding-top: 0.25rem;
+        padding-bottom: 0rem;
+        padding-left: 0.5rem;
+        padding-right: 0.5rem;
         max-width: 100%;
     }
 
+    /* Compact title */
     h1 {
-        font-size: 1.45rem !important;
+        font-size: 1.35rem !important;
         margin-top: 0rem !important;
-        margin-bottom: 0.15rem !important;
+        margin-bottom: 0.05rem !important;
     }
 
-    h2, h3 {
-        margin-top: 0.15rem !important;
-        margin-bottom: 0.15rem !important;
+    h2 {
+        font-size: 1.05rem !important;
+        margin-top: 0rem !important;
+        margin-bottom: 0.05rem !important;
     }
 
+    h3 {
+        font-size: 0.95rem !important;
+        margin-top: 0rem !important;
+        margin-bottom: 0.05rem !important;
+    }
+
+    /* Reduce gaps between columns */
     div[data-testid="stHorizontalBlock"] {
-        gap: 0.4rem;
+        gap: 0.3rem;
     }
 
+    /* Compact buttons */
     div[data-testid="stButton"] button {
         width: 100%;
-        min-height: 27px;
-        height: 27px;
-        padding: 0px 3px;
-        font-size: 0.78rem;
+        min-height: 25px;
+        height: 25px;
+        padding: 0px 2px;
+        font-size: 0.76rem;
     }
 
+    /* Compact text */
     div[data-testid="stMarkdownContainer"] p {
-        margin-bottom: 0.1rem;
+        margin-bottom: 0.05rem;
+    }
+
+    /* Compact alerts */
+    div[data-testid="stAlert"] {
+        padding: 0.25rem 0.5rem;
+        margin-bottom: 0.15rem;
+    }
+
+    /* Remove unnecessary vertical spacing */
+    div[data-testid="stVerticalBlock"] {
+        gap: 0.2rem;
     }
 
     </style>
@@ -102,13 +125,13 @@ market_open = (
 
 if market_open:
     st.success(
-        f"Market OPEN  |  New York: "
-        f"{ny_time.strftime('%I:%M:%S %p')}"
+        f"Market OPEN | "
+        f"{ny_time.strftime('%I:%M:%S %p')} New York"
     )
 else:
     st.info(
-        f"Market CLOSED  |  New York: "
-        f"{ny_time.strftime('%I:%M:%S %p')}"
+        f"Market CLOSED | "
+        f"{ny_time.strftime('%I:%M:%S %p')} New York"
     )
 
 
@@ -209,7 +232,7 @@ if "selected_ticker" not in st.session_state:
 
 
 # ============================================================
-# STOCK CALCULATION
+# CALCULATE STOCK
 # ============================================================
 
 def calculate_stock(symbol):
@@ -219,7 +242,7 @@ def calculate_stock(symbol):
         ticker = yf.Ticker(symbol)
 
         # ----------------------------------------------------
-        # 5 MINUTE DATA
+        # INTRADAY DATA
         # ----------------------------------------------------
 
         intraday = ticker.history(
@@ -273,7 +296,7 @@ def calculate_stock(symbol):
         )
 
         # ----------------------------------------------------
-        # PREVIOUS DAY CLOSE
+        # PREVIOUS CLOSE
         # ----------------------------------------------------
 
         if len(daily) >= 2:
@@ -305,7 +328,7 @@ def calculate_stock(symbol):
             change_pct = 0
 
         # ----------------------------------------------------
-        # AVERAGE DAILY VOLUME
+        # AVERAGE VOLUME
         # ----------------------------------------------------
 
         if len(daily) >= 6:
@@ -432,7 +455,7 @@ scanner_col, chart_col = st.columns(
 
 
 # ============================================================
-# LEFT SIDE - SCANNER
+# LEFT - SCANNER
 # ============================================================
 
 with scanner_col:
@@ -444,7 +467,7 @@ with scanner_col:
     if not df.empty:
 
         # ----------------------------------------------------
-        # APPLY FILTERS
+        # FILTER
         # ----------------------------------------------------
 
         filtered = df[
@@ -456,7 +479,7 @@ with scanner_col:
         ].copy()
 
         # ----------------------------------------------------
-        # SORT BY RELATIVE VOLUME
+        # SORT
         # ----------------------------------------------------
 
         filtered = filtered.sort_values(
@@ -469,7 +492,7 @@ with scanner_col:
         )
 
         # ----------------------------------------------------
-        # TABLE HEADER
+        # HEADER
         # ----------------------------------------------------
 
         h1, h2, h3, h4, h5 = st.columns(
@@ -489,7 +512,7 @@ with scanner_col:
         # ----------------------------------------------------
 
         with st.container(
-            height=700,
+            height=660,
             border=False
         ):
 
@@ -503,10 +526,7 @@ with scanner_col:
                     row["Time"]
                 )
 
-                # ------------------------------------------------
                 # CLICKABLE SYMBOL
-                # ------------------------------------------------
-
                 if c2.button(
                     row["Symbol"],
                     key=f"stock_{row['Symbol']}",
@@ -527,7 +547,6 @@ with scanner_col:
                     f"{row['% Change']:.2f}%"
                 )
 
-                # REL VOL = NUMBER ONLY
                 c5.write(
                     f"{row['Rel Vol']:.2f}"
                 )
@@ -540,7 +559,7 @@ with scanner_col:
 
 
 # ============================================================
-# RIGHT SIDE - TRADINGVIEW
+# RIGHT - TRADINGVIEW
 # ============================================================
 
 with chart_col:
@@ -558,7 +577,7 @@ with chart_col:
     )
 
     # ========================================================
-    # SQUARE RESPONSIVE TRADINGVIEW CHART
+    # RESPONSIVE SQUARE CHART
     # ========================================================
 
     tradingview_html = f"""
@@ -568,9 +587,16 @@ with chart_col:
 
     <head>
 
+        <meta
+            name="viewport"
+            content="width=device-width,
+                     initial-scale=1.0"
+        >
+
         <style>
 
-            html, body {{
+            html,
+            body {{
                 margin: 0;
                 padding: 0;
                 width: 100%;
@@ -581,7 +607,7 @@ with chart_col:
 
             .tradingview-widget-container {{
                 width: 100%;
-                aspect-ratio: 1 / 1;
+                height: 100%;
                 position: relative;
                 overflow: hidden;
             }}
@@ -638,10 +664,14 @@ with chart_col:
     </html>
     """
 
-    # Large enough outer container so the square
-    # TradingView chart has room to render.
+    # --------------------------------------------------------
+    # IMPORTANT:
+    # The outer iframe is deliberately large enough.
+    # The TradingView widget itself fills the available area.
+    # --------------------------------------------------------
+
     components.html(
         tradingview_html,
-        height=900,
+        height=720,
         scrolling=False
     )
