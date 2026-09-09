@@ -6,18 +6,136 @@ import streamlit.components.v1 as components
 
 
 # =========================================================
-# PAGE SETTINGS
+# PAGE CONFIGURATION
 # =========================================================
 
 st.set_page_config(
     page_title="US Stock Screener",
     page_icon="📈",
-    layout="wide"
+    layout="wide",
+    initial_sidebar_state="collapsed"
 )
 
 
 # =========================================================
-# 30 STOCK UNIVERSE
+# FORCE DARK LOOK
+# =========================================================
+
+st.markdown("""
+<style>
+
+html, body, [class*="css"] {
+    font-family: Arial, sans-serif;
+}
+
+/* Main application background */
+.stApp {
+    background-color: #0e1117;
+    color: #ffffff;
+}
+
+/* Main content */
+.main {
+    background-color: #0e1117;
+}
+
+/* Sidebar */
+section[data-testid="stSidebar"] {
+    background-color: #161a22;
+}
+
+/* Sidebar text */
+section[data-testid="stSidebar"] * {
+    color: #ffffff;
+}
+
+/* Header */
+.header-title {
+    font-size: 30px;
+    font-weight: 700;
+    color: #ffffff;
+    margin-bottom: 0px;
+}
+
+.header-subtitle {
+    color: #9ca3af;
+    font-size: 14px;
+    margin-top: 3px;
+    margin-bottom: 20px;
+}
+
+/* Stock buttons */
+.stButton > button {
+    width: 100%;
+    border-radius: 7px;
+    border: 1px solid #303641;
+    background-color: #161a22;
+    color: #ffffff;
+    text-align: left;
+    padding: 10px 12px;
+}
+
+.stButton > button:hover {
+    border-color: #ff4b4b;
+    color: #ffffff;
+    background-color: #20252f;
+}
+
+/* Metrics */
+[data-testid="stMetric"] {
+    background-color: #161a22;
+    border: 1px solid #303641;
+    border-radius: 8px;
+    padding: 10px;
+}
+
+/* Dataframe */
+[data-testid="stDataFrame"] {
+    background-color: #161a22;
+}
+
+/* Expander */
+[data-testid="stExpander"] {
+    background-color: #161a22;
+    border: 1px solid #303641;
+}
+
+/* Selectbox and inputs */
+div[data-baseweb="select"] > div {
+    background-color: #161a22;
+}
+
+input {
+    background-color: #161a22 !important;
+    color: #ffffff !important;
+}
+
+/* Horizontal line */
+hr {
+    border-color: #303641;
+}
+
+/* Info box */
+.stAlert {
+    background-color: #161a22;
+}
+
+/* Hide Streamlit default footer */
+footer {
+    visibility: hidden;
+}
+
+/* Hide deploy button */
+.stDeployButton {
+    display: none;
+}
+
+</style>
+""", unsafe_allow_html=True)
+
+
+# =========================================================
+# 30 US STOCKS
 # =========================================================
 
 STOCKS = {
@@ -61,60 +179,168 @@ STOCKS = {
 if "selected_ticker" not in st.session_state:
     st.session_state.selected_ticker = "NVDA"
 
-if "last_scan" not in st.session_state:
-    st.session_state.last_scan = None
+if "scan_results" not in st.session_state:
+    st.session_state.scan_results = []
+
+if "has_scanned" not in st.session_state:
+    st.session_state.has_scanned = False
 
 
 # =========================================================
-# CUSTOM CSS
+# DATA FUNCTION
 # =========================================================
 
-st.markdown("""
-<style>
+@st.cache_data(ttl=60)
+def get_stock_data(ticker):
 
-.block-container {
-    padding-top: 1rem;
-}
+    try:
 
-.stock-title {
-    font-size: 28px;
-    font-weight: bold;
-    margin-bottom: 0px;
-}
+        stock = yf.Ticker(ticker)
 
-.stock-subtitle {
-    color: gray;
-    margin-bottom: 15px;
-}
+        # 5-minute data
+        intraday = stock.history(
+            period="5d",
+            interval="5m",
+            auto_adjust=True
+        )
 
-.metric-box {
-    padding: 10px;
-    border-radius: 10px;
-}
+        # Daily data
+        daily = stock.history(
+            period="1mo",
+            interval="1d",
+            auto_adjust=True
+        )
 
-</style>
-""", unsafe_allow_html=True)
+        if intraday.empty or daily.empty:
+            return None
+
+        if len(daily) < 2:
+            return None
+
+        current_price = float(
+            intraday["Close"].iloc[-1]
+        )
+
+        previous_close = float(
+            daily["Close"].iloc[-2]
+        )
+
+        if previous_close <= 0:
+            return None
+
+        percent_change = (
+            (current_price - previous_close)
+            / previous_close
+        ) * 100
+
+        current_volume = float(
+            intraday["Volume"].iloc[-1]
+        )
+
+        # Average recent 5-minute volume
+        recent_volume = intraday["Volume"].tail(78)
+
+        average_volume = float(
+            recent_volume.mean()
+        )
+
+        if average_volume > 0:
+            rvol = current_volume / average_volume
+        else:
+            rvol = 0
+
+        # Total volume available in today's data
+        today = intraday[
+            intraday.index.date == intraday.index[-1].date()
+        ]
+
+        if today.empty:
+            total_volume = current_volume
+        else:
+            total_volume = float(
+                today["Volume"].sum()
+            )
+
+        return {
+            "Ticker": ticker,
+            "Company": STOCKS.get(ticker, ticker),
+            "Price": round(current_price, 2),
+            "% Change": round(percent_change, 2),
+            "Volume": int(total_volume),
+            "Current 5m Volume": int(current_volume),
+            "RVOL": round(rvol, 2)
+        }
+
+    except Exception:
+        return None
 
 
 # =========================================================
-# SIDEBAR FILTERS
+# SCANNER FUNCTION
+# =========================================================
+
+def scan_stocks(
+    min_price,
+    max_price,
+    min_volume,
+    min_change,
+    min_rvol
+):
+
+    results = []
+
+    progress = st.progress(0)
+
+    total = len(STOCKS)
+
+    for number, ticker in enumerate(STOCKS.keys(), start=1):
+
+        data = get_stock_data(ticker)
+
+        if data is not None:
+
+            if (
+                data["Price"] >= min_price
+                and data["Price"] <= max_price
+                and data["Volume"] >= min_volume
+                and data["% Change"] >= min_change
+                and data["RVOL"] >= min_rvol
+            ):
+
+                results.append(data)
+
+        progress.progress(
+            number / total
+        )
+
+    progress.empty()
+
+    return results
+
+
+# =========================================================
+# SIDEBAR
 # =========================================================
 
 with st.sidebar:
 
-    st.header("⚙ Filters")
+    st.markdown(
+        "## ⚙️ Filters"
+    )
+
+    st.markdown("---")
 
     min_price = st.number_input(
         "Minimum Price",
         min_value=0.0,
         value=1.0,
-        step=0.5
+        step=1.0
     )
 
     max_price = st.number_input(
         "Maximum Price",
-        min_value=0.0,
-        value=10000.0,
+        min_value=1.0,
+        value=1000.0,
         step=10.0
     )
 
@@ -122,7 +348,7 @@ with st.sidebar:
         "Minimum Volume",
         min_value=0,
         value=100000,
-        step=10000
+        step=50000
     )
 
     min_change = st.number_input(
@@ -138,135 +364,22 @@ with st.sidebar:
         step=0.1
     )
 
-    st.divider()
+    st.markdown("---")
 
     scan_button = st.button(
-        "🔍 Scan Stocks",
+        "🔍 SCAN STOCKS",
         use_container_width=True
     )
 
-    st.divider()
+    st.markdown("---")
 
-    auto_refresh = st.checkbox(
-        "Auto Refresh",
-        value=False
-    )
+    if st.button(
+        "🔄 Refresh Data",
+        use_container_width=True
+    ):
 
-    refresh_seconds = st.selectbox(
-        "Refresh Every",
-        [30, 60, 120, 300],
-        index=1
-    )
-
-
-# =========================================================
-# DATA FUNCTION
-# =========================================================
-
-@st.cache_data(ttl=60)
-def get_stock_data(ticker):
-
-    try:
-
-        stock = yf.Ticker(ticker)
-
-        intraday = stock.history(
-            period="5d",
-            interval="5m",
-            auto_adjust=True
-        )
-
-        daily = stock.history(
-            period="1mo",
-            interval="1d",
-            auto_adjust=True
-        )
-
-        if intraday.empty or daily.empty:
-            return None
-
-        current_price = float(intraday["Close"].iloc[-1])
-
-        previous_close = float(daily["Close"].iloc[-2])
-
-        percent_change = (
-            (current_price - previous_close)
-            / previous_close
-        ) * 100
-
-        current_volume = float(
-            intraday["Volume"].iloc[-1]
-        )
-
-        average_volume = float(
-            intraday["Volume"].tail(78).mean()
-        )
-
-        if average_volume > 0:
-            rvol = current_volume / average_volume
-        else:
-            rvol = 0
-
-        total_volume_today = float(
-            intraday["Volume"].sum()
-        )
-
-        return {
-            "Ticker": ticker,
-            "Price": round(current_price, 2),
-            "% Change": round(percent_change, 2),
-            "Current Volume": int(current_volume),
-            "Total Volume": int(total_volume_today),
-            "RVOL": round(rvol, 2)
-        }
-
-    except Exception as e:
-
-        return None
-
-
-# =========================================================
-# SCANNER
-# =========================================================
-
-def scan_stocks():
-
-    results = []
-
-    progress_bar = st.progress(0)
-
-    total_stocks = len(STOCKS)
-
-    for index, ticker in enumerate(STOCKS.keys()):
-
-        data = get_stock_data(ticker)
-
-        if data is not None:
-
-            price = data["Price"]
-            total_volume = data["Total Volume"]
-            percent_change = data["% Change"]
-            rvol = data["RVOL"]
-
-            if (
-                price >= min_price
-                and price <= max_price
-                and total_volume >= min_volume
-                and percent_change >= min_change
-                and rvol >= min_rvol
-            ):
-
-                results.append(data)
-
-        progress = int(
-            ((index + 1) / total_stocks) * 100
-        )
-
-        progress_bar.progress(progress)
-
-    progress_bar.empty()
-
-    return results
+        st.cache_data.clear()
+        st.rerun()
 
 
 # =========================================================
@@ -274,36 +387,42 @@ def scan_stocks():
 # =========================================================
 
 st.markdown(
-    '<div class="stock-title">📈 US STOCK SCREENER</div>',
+    '<div class="header-title">📈 US STOCK SCREENER</div>',
     unsafe_allow_html=True
 )
 
 st.markdown(
-    '<div class="stock-subtitle">30 Stock Momentum Scanner</div>',
+    '<div class="header-subtitle">'
+    '30-stock US momentum scanner'
+    '</div>',
     unsafe_allow_html=True
 )
 
 
 # =========================================================
-# SCAN
+# RUN SCANNER
 # =========================================================
 
-if scan_button or st.session_state.last_scan is None:
+if scan_button:
 
-    with st.spinner("Scanning US stocks..."):
+    with st.spinner("Scanning stocks..."):
 
-        results = scan_stocks()
+        st.session_state.scan_results = scan_stocks(
+            min_price,
+            max_price,
+            min_volume,
+            min_change,
+            min_rvol
+        )
 
-        st.session_state.last_scan = results
-
-else:
-
-    results = st.session_state.last_scan
+        st.session_state.has_scanned = True
 
 
 # =========================================================
-# RESULTS DATAFRAME
+# RESULTS
 # =========================================================
+
+results = st.session_state.scan_results
 
 if results:
 
@@ -319,200 +438,230 @@ else:
     results_df = pd.DataFrame(
         columns=[
             "Ticker",
+            "Company",
             "Price",
             "% Change",
-            "Current Volume",
-            "Total Volume",
+            "Volume",
+            "Current 5m Volume",
             "RVOL"
         ]
     )
 
 
 # =========================================================
-# MAIN LAYOUT
+# TWO COLUMN LAYOUT
 # =========================================================
 
-left_column, right_column = st.columns(
+left, right = st.columns(
     [1, 3],
     gap="medium"
 )
 
 
 # =========================================================
-# LEFT SIDE - STOCK LIST
+# LEFT SIDE
 # =========================================================
 
-with left_column:
+with left:
 
-    st.subheader("Matching Stocks")
+    st.markdown("### Matching Stocks")
 
-    if results_df.empty:
+    if not st.session_state.has_scanned:
 
         st.info(
+            "Open ⚙️ Filters and press "
+            "SCAN STOCKS."
+        )
+
+    elif results_df.empty:
+
+        st.warning(
             "No stocks match the current filters."
         )
 
     else:
 
+        st.caption(
+            f"{len(results_df)} stocks found"
+        )
+
         for _, row in results_df.iterrows():
 
             ticker = row["Ticker"]
 
-            company = STOCKS.get(
-                ticker,
-                ticker
-            )
+            company = row["Company"]
 
-            button_text = (
-                f"{ticker}  |  {company}"
-            )
+            label = f"{ticker}  •  {company}"
 
             if st.button(
-                button_text,
-                key=f"stock_{ticker}",
+                label,
+                key=f"ticker_{ticker}",
                 use_container_width=True
             ):
 
                 st.session_state.selected_ticker = ticker
 
+                st.rerun()
+
 
 # =========================================================
-# RIGHT SIDE - CHART
+# RIGHT SIDE
 # =========================================================
 
-with right_column:
+with right:
 
-    selected = st.session_state.selected_ticker
-
-    company_name = STOCKS.get(
-        selected,
-        selected
+    selected_ticker = (
+        st.session_state.selected_ticker
     )
 
-    st.subheader(
-        f"{selected} — {company_name}"
+    selected_company = STOCKS.get(
+        selected_ticker,
+        selected_ticker
+    )
+
+    st.markdown(
+        f"### {selected_ticker} — {selected_company}"
     )
 
 
-    # ---------------------------------------------
-    # SELECTED STOCK METRICS
-    # ---------------------------------------------
+    # =====================================================
+    # SELECTED STOCK INFORMATION
+    # =====================================================
 
-    selected_row = results_df[
-        results_df["Ticker"] == selected
-    ]
+    selected_data = None
 
-    if not selected_row.empty:
+    for item in results:
 
-        row = selected_row.iloc[0]
+        if item["Ticker"] == selected_ticker:
 
-        m1, m2, m3, m4 = st.columns(4)
+            selected_data = item
+            break
 
-        m1.metric(
+
+    if selected_data:
+
+        c1, c2, c3, c4 = st.columns(4)
+
+        c1.metric(
             "Price",
-            f"${row['Price']}"
+            f"${selected_data['Price']}"
         )
 
-        m2.metric(
-            "% Change",
-            f"{row['% Change']}%"
+        c2.metric(
+            "Change",
+            f"{selected_data['% Change']}%"
         )
 
-        m3.metric(
+        c3.metric(
             "RVOL",
-            row["RVOL"]
+            f"{selected_data['RVOL']}x"
         )
 
-        m4.metric(
-            "Total Volume",
-            f"{int(row['Total Volume']):,}"
+        c4.metric(
+            "Volume",
+            f"{selected_data['Volume']:,}"
         )
 
 
-    # ---------------------------------------------
-    # TRADINGVIEW CHART
-    # ---------------------------------------------
+    # =====================================================
+    # TRADINGVIEW
+    # =====================================================
 
-    tradingview_html = f"""
-    <div class="tradingview-widget-container">
+    chart_html = f"""
 
-      <div
-        id="tradingview_chart"
-        style="height:650px;">
-      </div>
+    <div
+        class="tradingview-widget-container"
+        style="height:650px;width:100%;">
 
-      <script
-        type="text/javascript"
-        src="https://s3.tradingview.com/tv.js">
-      </script>
+        <div
+            id="tradingview_chart"
+            style="height:650px;width:100%;">
+        </div>
 
-      <script type="text/javascript">
+        <script
+            type="text/javascript"
+            src="https://s3.tradingview.com/tv.js">
+        </script>
 
-      new TradingView.widget({{
+        <script type="text/javascript">
 
-        "width": "100%",
-        "height": 650,
+        new TradingView.widget({{
 
-        "symbol": "NASDAQ:{selected}",
+            "autosize": true,
 
-        "interval": "5",
+            "symbol": "NASDAQ:{selected_ticker}",
 
-        "timezone": "America/New_York",
+            "interval": "5",
 
-        "theme": "dark",
+            "timezone": "America/New_York",
 
-        "style": "1",
+            "theme": "dark",
 
-        "locale": "en",
+            "style": "1",
 
-        "toolbar_bg": "#f1f3f6",
+            "locale": "en",
 
-        "enable_publishing": false,
+            "enable_publishing": false,
 
-        "allow_symbol_change": true,
+            "hide_top_toolbar": false,
 
-        "container_id": "tradingview_chart"
+            "hide_legend": false,
 
-      }});
+            "allow_symbol_change": true,
 
-      </script>
+            "save_image": false,
+
+            "container_id": "tradingview_chart"
+
+        }});
+
+        </script>
 
     </div>
+
     """
 
     components.html(
-        tradingview_html,
+        chart_html,
         height=670
     )
 
 
 # =========================================================
-# RESULTS TABLE
+# TABLE
 # =========================================================
-
-st.divider()
-
-st.subheader(
-    f"Scanner Results ({len(results_df)})"
-)
 
 if not results_df.empty:
 
+    st.markdown("---")
+
+    st.markdown("### Scanner Results")
+
+    display_df = results_df[
+        [
+            "Ticker",
+            "Company",
+            "Price",
+            "% Change",
+            "Volume",
+            "RVOL"
+        ]
+    ]
+
     st.dataframe(
-        results_df,
+        display_df,
         use_container_width=True,
         hide_index=True
     )
 
 
 # =========================================================
-# AUTO REFRESH
+# FOOTER
 # =========================================================
 
-if auto_refresh:
+st.markdown("---")
 
-    time.sleep(refresh_seconds)
-
-    st.cache_data.clear()
-
-    st.rerun()
+st.caption(
+    "Prototype scanner • Data provided by Yahoo Finance-compatible "
+    "market data • TradingView chart"
+)
