@@ -17,13 +17,18 @@ st.set_page_config(
 
 
 # =========================================================
-# COMPACT SCREEN CSS
+# SCREEN / SPACING
+# =========================================================
+CHART_HEIGHT = 540
+
+
+# =========================================================
+# COMPACT CSS
 # =========================================================
 st.markdown(
     """
     <style>
 
-    /* Reduce page margins */
     .block-container {
         padding-top: 0.05rem !important;
         padding-bottom: 0rem !important;
@@ -32,26 +37,17 @@ st.markdown(
         max-width: 100% !important;
     }
 
-    /* Compact title */
-    h1 {
-        font-size: 1.15rem !important;
-        margin: 0rem !important;
-        padding: 0rem !important;
-    }
-
-    h2 {
-        font-size: 0.95rem !important;
-        margin: 0rem !important;
-        padding: 0rem !important;
+    h1, h2, h3 {
+        margin-top: 0rem !important;
+        margin-bottom: 0rem !important;
+        padding-top: 0rem !important;
+        padding-bottom: 0rem !important;
     }
 
     h3 {
-        font-size: 0.85rem !important;
-        margin: 0rem !important;
-        padding: 0rem !important;
+        font-size: 1.05rem !important;
     }
 
-    /* Reduce vertical gaps */
     div[data-testid="stVerticalBlock"] {
         gap: 0.05rem !important;
     }
@@ -60,26 +56,22 @@ st.markdown(
         gap: 0.2rem !important;
     }
 
-    /* Scanner buttons */
-    div[data-testid="stButton"] button {
-        width: 100%;
-        min-height: 23px !important;
-        height: 23px !important;
-        padding: 0px 2px !important;
-        font-size: 0.72rem !important;
-        line-height: 1 !important;
-    }
-
-    /* Text spacing */
     div[data-testid="stMarkdownContainer"] p {
         margin: 0rem !important;
         padding: 0rem !important;
-        font-size: 0.75rem !important;
     }
 
-    /* Alert spacing */
+    div[data-testid="stButton"] button {
+        width: 100%;
+        min-height: 22px !important;
+        height: 22px !important;
+        padding: 0px 2px !important;
+        font-size: 0.70rem !important;
+        line-height: 1 !important;
+    }
+
     div[data-testid="stAlert"] {
-        padding: 0.15rem 0.4rem !important;
+        padding: 0.1rem 0.3rem !important;
         margin: 0rem !important;
     }
 
@@ -87,12 +79,6 @@ st.markdown(
     """,
     unsafe_allow_html=True
 )
-
-
-# =========================================================
-# DASHBOARD HEIGHT
-# =========================================================
-DASHBOARD_HEIGHT = 500
 
 
 # =========================================================
@@ -115,32 +101,30 @@ market_open = (
 )
 
 if market_open:
-    market_status = "🟢 MARKET OPEN"
+    market_status = "🟢 OPEN"
 else:
-    market_status = "🔴 MARKET CLOSED"
+    market_status = "🔴 CLOSED"
 
 
 # =========================================================
 # HEADER
 # =========================================================
-header_col1, header_col2 = st.columns([4, 1])
+title_col, status_col = st.columns([5, 1])
 
-with header_col1:
-
+with title_col:
     st.markdown(
         "### 🚀 US Stock Momentum Scanner"
     )
 
-with header_col2:
-
+with status_col:
     st.markdown(
         f"""
         <div style="
             text-align:right;
-            font-size:0.78rem;
+            font-size:0.75rem;
             padding-top:5px;
         ">
-            {market_status}
+        {market_status}
         </div>
         """,
         unsafe_allow_html=True
@@ -239,9 +223,6 @@ def calculate_stock(symbol):
 
         ticker = yf.Ticker(symbol)
 
-        # -------------------------------------------------
-        # Intraday 5-minute data
-        # -------------------------------------------------
         intraday = ticker.history(
             period="5d",
             interval="5m",
@@ -249,9 +230,6 @@ def calculate_stock(symbol):
             auto_adjust=False
         )
 
-        # -------------------------------------------------
-        # Daily data
-        # -------------------------------------------------
         daily = ticker.history(
             period="20d",
             interval="1d",
@@ -272,16 +250,12 @@ def calculate_stock(symbol):
         if len(daily) < 6:
             return None
 
-        # -------------------------------------------------
-        # Latest traded price
-        # -------------------------------------------------
+        # Current price
         ltp = float(
             intraday["Close"].iloc[-1]
         )
 
-        # -------------------------------------------------
         # Latest trading session
-        # -------------------------------------------------
         latest_date = (
             intraday.index[-1].date()
         )
@@ -293,31 +267,23 @@ def calculate_stock(symbol):
         if session_data.empty:
             return None
 
-        # -------------------------------------------------
-        # Total volume for current session
-        # -------------------------------------------------
+        # Total current-session volume
         session_volume = float(
             session_data["Volume"].sum()
         )
 
-        # -------------------------------------------------
         # Previous day's close
-        # -------------------------------------------------
         previous_close = float(
             daily["Close"].iloc[-2]
         )
 
-        # -------------------------------------------------
         # Percentage change
-        # -------------------------------------------------
         change_pct = (
             (ltp - previous_close)
             / previous_close
         ) * 100
 
-        # -------------------------------------------------
-        # Average volume of previous 5 sessions
-        # -------------------------------------------------
+        # Previous 5-day average volume
         previous_volumes = (
             daily["Volume"].iloc[-6:-1]
         )
@@ -329,9 +295,7 @@ def calculate_stock(symbol):
         if average_daily_volume <= 0:
             return None
 
-        # -------------------------------------------------
-        # Relative Volume
-        # -------------------------------------------------
+        # Relative volume
         rel_volume = (
             session_volume
             / average_daily_volume
@@ -365,9 +329,7 @@ def run_scanner():
 
     total = len(stock_universe)
 
-    for i, symbol in enumerate(
-        stock_universe
-    ):
+    for i, symbol in enumerate(stock_universe):
 
         result = calculate_stock(symbol)
 
@@ -390,14 +352,9 @@ def run_scanner():
 # SESSION STATE
 # =========================================================
 if "scanner_data" not in st.session_state:
-
-    st.session_state.scanner_data = (
-        pd.DataFrame()
-    )
-
+    st.session_state.scanner_data = pd.DataFrame()
 
 if "selected_ticker" not in st.session_state:
-
     st.session_state.selected_ticker = "AAPL"
 
 
@@ -409,13 +366,11 @@ if (
     or st.session_state.scanner_data.empty
 ):
 
-    st.session_state.scanner_data = (
-        run_scanner()
-    )
+    st.session_state.scanner_data = run_scanner()
 
 
 # =========================================================
-# FILTER RESULTS
+# FILTER DATA
 # =========================================================
 data = st.session_state.scanner_data.copy()
 
@@ -429,7 +384,6 @@ if not data.empty:
         & (data["% Change"] >= min_change)
     ].copy()
 
-    # Highest Relative Volume first
     filtered = filtered.sort_values(
         by="Rel Vol",
         ascending=False
@@ -441,8 +395,10 @@ else:
 
 
 # =========================================================
-# MAIN DASHBOARD
-# 35% SCANNER / 65% CHART
+# MAIN LAYOUT
+#
+# LEFT  = 35%
+# RIGHT = 65%
 # =========================================================
 scanner_col, chart_col = st.columns(
     [35, 65],
@@ -451,15 +407,13 @@ scanner_col, chart_col = st.columns(
 
 
 # =========================================================
-# LEFT SIDE — SCANNER 35%
+# SCANNER — 35%
 # =========================================================
 with scanner_col:
 
     st.markdown("**📊 Scanner**")
 
-    # -----------------------------------------------------
-    # Column headings
-    # -----------------------------------------------------
+    # Headers
     h1, h2, h3, h4, h5 = st.columns(
         [1.1, 1.3, 1.15, 1.25, 1.1]
     )
@@ -470,20 +424,20 @@ with scanner_col:
     h4.markdown("**% Change**")
     h5.markdown("**Rel Vol**")
 
-    st.markdown("---")
+    st.markdown(
+        "<hr style='margin:2px 0px;'>",
+        unsafe_allow_html=True
+    )
 
-    # -----------------------------------------------------
-    # Scanner table
-    # -----------------------------------------------------
     with st.container(
-        height=DASHBOARD_HEIGHT - 45,
+        height=CHART_HEIGHT - 35,
         border=False
     ):
 
         if filtered.empty:
 
             st.info(
-                "No stocks match the current filters."
+                "No stocks match the filters."
             )
 
         else:
@@ -499,7 +453,7 @@ with scanner_col:
                     row["Time"]
                 )
 
-                # Clickable symbol
+                # Symbol
                 if c2.button(
                     row["Symbol"],
                     key=f"stock_{row['Symbol']}",
@@ -517,20 +471,19 @@ with scanner_col:
                     f"${row['LTP']:.2f}"
                 )
 
-                # Percentage change
+                # Change
                 c4.write(
                     f"{row['% Change']:.2f}%"
                 )
 
                 # Relative volume
-                # Number only — no X
                 c5.write(
                     f"{row['Rel Vol']:.2f}"
                 )
 
 
 # =========================================================
-# RIGHT SIDE — TRADINGVIEW 65%
+# TRADINGVIEW — 65%
 # =========================================================
 with chart_col:
 
@@ -543,7 +496,7 @@ with chart_col:
     )
 
     # -----------------------------------------------------
-    # Exchange mapping
+    # Exchange
     # -----------------------------------------------------
     nyse_symbols = {
         "GME",
@@ -553,20 +506,13 @@ with chart_col:
     }
 
     if selected in nyse_symbols:
-
-        tv_symbol = (
-            f"NYSE:{selected}"
-        )
-
+        tv_symbol = f"NYSE:{selected}"
     else:
-
-        tv_symbol = (
-            f"NASDAQ:{selected}"
-        )
+        tv_symbol = f"NASDAQ:{selected}"
 
 
     # =====================================================
-    # TRADINGVIEW ADVANCED CHART
+    # TRADINGVIEW HTML
     # =====================================================
     tradingview_html = f"""
     <!DOCTYPE html>
@@ -587,17 +533,32 @@ with chart_col:
             body {{
                 margin: 0;
                 padding: 0;
+
                 width: 100%;
                 height: 100%;
+
                 overflow: hidden;
+
                 background: #131722;
+            }}
+
+            #tv_container {{
+                width: 100%;
+                height: 100%;
+
+                position: relative;
+
+                overflow: hidden;
             }}
 
             .tradingview-widget-container {{
                 width: 100%;
                 height: 100%;
-                position: relative;
-                overflow: hidden;
+
+                position: absolute;
+
+                top: 0;
+                left: 0;
             }}
 
             .tradingview-widget-container__widget {{
@@ -609,60 +570,65 @@ with chart_col:
 
     </head>
 
+
     <body>
 
-        <div
-            class="tradingview-widget-container"
-        >
+        <div id="tv_container">
 
             <div
-                class="tradingview-widget-container__widget"
+                class="tradingview-widget-container"
             >
+
+                <div
+                    class="tradingview-widget-container__widget"
+                >
+                </div>
+
+                <script
+                    type="text/javascript"
+                    src="https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js"
+                    async
+                >
+
+                {{
+                    "autosize": true,
+
+                    "symbol": "{tv_symbol}",
+
+                    "interval": "5",
+
+                    "timezone": "America/New_York",
+
+                    "theme": "dark",
+
+                    "style": "1",
+
+                    "locale": "en",
+
+                    "allow_symbol_change": true,
+
+                    "hide_top_toolbar": false,
+
+                    "hide_side_toolbar": false,
+
+                    "save_image": true,
+
+                    "details": false,
+
+                    "hotlist": false,
+
+                    "calendar": false,
+
+                    "withdateranges": true,
+
+                    "hide_volume": false,
+
+                    "support_host": "https://www.tradingview.com"
+                }}
+
+                </script>
+
             </div>
-
-            <script
-                type="text/javascript"
-                src="https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js"
-                async
-            >
-
-            {{
-                "autosize": true,
-
-                "symbol": "{tv_symbol}",
-
-                "interval": "5",
-
-                "timezone": "America/New_York",
-
-                "theme": "dark",
-
-                "style": "1",
-
-                "locale": "en",
-
-                "allow_symbol_change": true,
-
-                "hide_top_toolbar": false,
-
-                "hide_side_toolbar": false,
-
-                "save_image": true,
-
-                "details": false,
-
-                "hotlist": false,
-
-                "calendar": false,
-
-                "withdateranges": true,
-
-                "hide_volume": false,
-
-                "support_host": "https://www.tradingview.com"
-            }}
-
-            </script>
 
         </div>
 
@@ -671,8 +637,13 @@ with chart_col:
     </html>
     """
 
+
+    # =====================================================
+    # IMPORTANT:
+    # Extra height prevents TradingView toolbar clipping
+    # =====================================================
     components.html(
         tradingview_html,
-        height=DASHBOARD_HEIGHT,
+        height=CHART_HEIGHT + 20,
         scrolling=False
     )
