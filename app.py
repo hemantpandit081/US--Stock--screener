@@ -1,795 +1,654 @@
-import streamlit as st
+from flask import Flask, render_template, jsonify, request
 import yfinance as yf
 import pandas as pd
-import json
-import os
+import numpy as np
+import threading
 import time
-import streamlit.components.v1 as components
+from datetime import datetime
 
-# =========================================================
-# PAGE
-# =========================================================
+app = Flask(__name__)
 
-st.set_page_config(
-    page_title="US Momentum Scanner",
-    page_icon="📈",
-    layout="wide",
-    initial_sidebar_state="collapsed"
-)
+# ============================================================
+# CONFIGURATION
+# ============================================================
 
-# =========================================================
-# CSS
-# =========================================================
+REFRESH_SECONDS = 60
 
-st.markdown("""
-<style>
+# Prototype universe.
+# We can later replace this with the full US stock universe.
+STOCKS = [
+    "AAPL", "MSFT", "NVDA", "AMZN", "META", "TSLA", "GOOGL",
+    "GOOG", "AVGO", "AMD", "NFLX", "PLTR", "MU", "INTC",
+    "SMCI", "ARM", "MSTR", "COIN", "HOOD", "SOFI",
+    "RIVN", "LCID", "NIO", "XPEV", "LI",
+    "BBAI", "SOUN", "AI", "IONQ", "RGTI",
+    "RKLB", "ASTS", "LUNR", "OKLO", "SMR",
+    "CRWD", "PANW", "NET", "SNOW", "DDOG",
+    "SHOP", "UBER", "ABNB", "DASH", "PYPL",
+    "JPM", "BAC", "C", "WFC", "GS",
+    "XOM", "CVX", "OXY",
+    "BA", "GE", "CAT",
+    "COST", "WMT", "TGT",
+    "NKE", "DIS",
+    "PFE", "MRNA",
+    "CVNA", "MARA", "RIOT",
+    "CLSK", "HUT", "BITF",
+    "GME", "AMC",
+    "BB", "SNAP", "RBLX",
+    "DKNG", "PLTK",
+    "TQQQ", "SQQQ", "SOXL", "SOXS",
+]
 
-html, body, [class*="css"] {
-    font-family: Arial, sans-serif;
-}
+# Cache
+scanner_cache = []
+last_update = None
 
-.stApp {
-    background: #0b0f14;
-    color: #ffffff;
-}
-
-section[data-testid="stSidebar"] {
-    background: #11161d;
-}
-
-.block-container {
-    padding-top: 1rem;
-    padding-left: 1rem;
-    padding-right: 1rem;
-}
-
-h1 {
-    font-size: 24px !important;
-    margin-bottom: 5px !important;
-}
-
-.scanner-header {
-    background: #161c24;
-    border-bottom: 1px solid #303741;
-    padding: 8px 5px;
-    color: #9da7b3;
-    font-size: 12px;
-    font-weight: bold;
-}
-
-.stock-row {
-    border-bottom: 1px solid #20262e;
-    padding: 3px 0px;
-}
-
-.metric {
-    font-size: 13px;
-    color: #e5e7eb;
-}
-
-.symbol {
-    font-size: 14px;
-    font-weight: bold;
-}
-
-.green {
-    color: #22c55e;
-}
-
-.red {
-    color: #ef4444;
-}
-
-.repeat-dot {
-    color: white;
-    font-size: 13px;
-    margin-left: 4px;
-}
-
-.small-text {
-    color: #7f8a98;
-    font-size: 11px;
-}
-
-div.stButton > button {
-    background: transparent;
-    border: none;
-    color: #ffffff;
-    padding: 0px;
-    margin: 0px;
-    font-size: 14px;
-    font-weight: bold;
-    text-align: left;
-}
-
-div.stButton > button:hover {
-    color: #38bdf8;
-    border: none;
-}
-
-</style>
-""", unsafe_allow_html=True)
-
-# =========================================================
-# TITLE
-# =========================================================
-
-st.title("📈 US Momentum Scanner")
-
-# =========================================================
-# SETTINGS
-# =========================================================
-
-DEFAULT_SETTINGS = {
-    "min_price": 1.0,
-    "max_price": 20.0,
-    "min_volume": 100000,
-    "min_rvol": 2.0,
-    "min_change": 2.0,
-    "repeat_tolerance": 90,
-    "refresh_seconds": 60,
-    "auto_scan": False
-}
-
-SETTINGS_FILE = "scanner_settings.json"
+# Lock prevents multiple scans at once
+scan_lock = threading.Lock()
 
 
-def load_settings():
-    if os.path.exists(SETTINGS_FILE):
-        try:
-            with open(SETTINGS_FILE, "r") as f:
-                return {**DEFAULT_SETTINGS, **json.load(f)}
-        except:
-            pass
+# ============================================================
+# HELPER FUNCTIONS
+# ============================================================
 
-    return DEFAULT_SETTINGS.copy()
-
-
-def save_settings(settings):
-    with open(SETTINGS_FILE, "w") as f:
-        json.dump(settings, f, indent=4)
-
-
-settings = load_settings()
-
-# =========================================================
-# SIDEBAR
-# =========================================================
-
-with st.sidebar:
-
-    st.header("Scanner Filters")
-
-    auto_scan = st.checkbox(
-        "Automatic Scanner",
-        value=settings["auto_scan"]
-    )
-
-    refresh_seconds = st.number_input(
-        "Refresh Seconds",
-        min_value=10,
-        max_value=600,
-        value=int(settings["refresh_seconds"]),
-        step=10
-    )
-
-    min_price = st.number_input(
-        "Minimum Price",
-        min_value=0.01,
-        value=float(settings["min_price"]),
-        step=0.50
-    )
-
-    max_price = st.number_input(
-        "Maximum Price",
-        min_value=0.01,
-        value=float(settings["max_price"]),
-        step=0.50
-    )
-
-    min_volume = st.number_input(
-        "Minimum Volume",
-        min_value=0,
-        value=int(settings["min_volume"]),
-        step=10000
-    )
-
-    min_rvol = st.number_input(
-        "Minimum Relative Volume",
-        min_value=0.1,
-        value=float(settings["min_rvol"]),
-        step=0.5
-    )
-
-    min_change = st.number_input(
-        "Minimum % Change",
-        min_value=0.0,
-        value=float(settings["min_change"]),
-        step=0.5
-    )
-
-    repeat_tolerance = st.number_input(
-        "Repeat Volume Tolerance %",
-        min_value=50,
-        max_value=100,
-        value=int(settings["repeat_tolerance"]),
-        step=5
-    )
-
-    save_button = st.button("Save Settings")
-
-    scan_button = st.button("🔎 Scan Now")
-
-    if save_button:
-
-        settings = {
-            "min_price": min_price,
-            "max_price": max_price,
-            "min_volume": min_volume,
-            "min_rvol": min_rvol,
-            "min_change": min_change,
-            "repeat_tolerance": repeat_tolerance,
-            "refresh_seconds": refresh_seconds,
-            "auto_scan": auto_scan
-        }
-
-        save_settings(settings)
-
-        st.success("Settings saved")
-
-# =========================================================
-# LOAD RUSSELL 2000
-# =========================================================
-
-@st.cache_data
-def load_symbols():
-
+def safe_float(value, default=0.0):
     try:
-
-        df = pd.read_csv("russell2000.csv")
-
-        possible_columns = [
-            "Symbol",
-            "symbol",
-            "Ticker",
-            "ticker"
-        ]
-
-        symbol_column = None
-
-        for col in possible_columns:
-            if col in df.columns:
-                symbol_column = col
-                break
-
-        if symbol_column is None:
-            return []
-
-        symbols = (
-            df[symbol_column]
-            .dropna()
-            .astype(str)
-            .str.upper()
-            .str.strip()
-            .tolist()
-        )
-
-        symbols = list(dict.fromkeys(symbols))
-
-        return symbols
-
+        if pd.isna(value):
+            return default
+        return float(value)
     except Exception:
+        return default
 
-        return []
 
+def calculate_rvol(current_volume, average_volume):
+    """
+    Simple daily Relative Volume:
 
-symbols = load_symbols()
+        RVOL = today's volume / average 20-day volume
 
-# =========================================================
-# SESSION STATE
-# =========================================================
+    Example:
+        today's volume = 20 million
+        average volume = 2 million
 
-if "results" not in st.session_state:
-    st.session_state.results = []
-
-if "selected_ticker" not in st.session_state:
-    st.session_state.selected_ticker = "NVDA"
-
-if "last_scan" not in st.session_state:
-    st.session_state.last_scan = 0
-
-
-# =========================================================
-# SCANNER
-# =========================================================
-
-def scan_market():
-
-    results = []
-
-    if not symbols:
-        return results
-
-    # -----------------------------------------------------
-    # Download 1-minute data
-    # -----------------------------------------------------
-
-    try:
-
-        intraday = yf.download(
-            tickers=symbols,
-            period="1d",
-            interval="1m",
-            group_by="ticker",
-            auto_adjust=False,
-            progress=False,
-            threads=True
-        )
-
-    except Exception:
-
-        return results
-
-    # -----------------------------------------------------
-    # Daily data
-    # -----------------------------------------------------
-
-    try:
-
-        daily = yf.download(
-            tickers=symbols,
-            period="20d",
-            interval="1d",
-            group_by="ticker",
-            auto_adjust=False,
-            progress=False,
-            threads=True
-        )
-
-    except Exception:
-
-        return results
-
-    # -----------------------------------------------------
-    # Process stocks
-    # -----------------------------------------------------
-
-    for symbol in symbols:
-
-        try:
-
-            # =============================
-            # Intraday
-            # =============================
-
-            if len(symbols) == 1:
-
-                minute_df = intraday.copy()
-
-            else:
-
-                if symbol not in intraday.columns.get_level_values(0):
-                    continue
-
-                minute_df = intraday[symbol].copy()
-
-            minute_df = minute_df.dropna(subset=["Close", "Volume"])
-
-            if minute_df.empty:
-                continue
-
-            # =============================
-            # Last price
-            # =============================
-
-            last_price = float(
-                minute_df["Close"].iloc[-1]
-            )
-
-            # =============================
-            # Current 1 minute volume
-            # =============================
-
-            current_volume = float(
-                minute_df["Volume"].iloc[-1]
-            )
-
-            # =============================
-            # Session volume
-            # =============================
-
-            session_volume = float(
-                minute_df["Volume"].sum()
-            )
-
-            # =============================
-            # Highest previous 1-min volume
-            # =============================
-
-            previous_volumes = minute_df["Volume"].iloc[:-1]
-
-            if len(previous_volumes) > 0:
-
-                previous_high_volume = float(
-                    previous_volumes.max()
-                )
-
-            else:
-
-                previous_high_volume = 0
-
-            # =============================
-            # Repeat volume
-            # =============================
-
-            repeat_volume = False
-
-            if previous_high_volume > 0:
-
-                repeat_volume = (
-                    current_volume
-                    >= previous_high_volume
-                    * repeat_tolerance
-                    / 100
-                )
-
-            # =============================
-            # Daily data
-            # =============================
-
-            if len(symbols) == 1:
-
-                daily_df = daily.copy()
-
-            else:
-
-                if symbol not in daily.columns.get_level_values(0):
-                    continue
-
-                daily_df = daily[symbol].copy()
-
-            daily_df = daily_df.dropna(
-                subset=["Close", "Volume"]
-            )
-
-            if len(daily_df) < 2:
-                continue
-
-            # =============================
-            # Previous close
-            # =============================
-
-            previous_close = float(
-                daily_df["Close"].iloc[-2]
-            )
-
-            # =============================
-            # Percentage change
-            # =============================
-
-            percent_change = (
-                (last_price - previous_close)
-                / previous_close
-            ) * 100
-
-            # =============================
-            # Average daily volume
-            # =============================
-
-            historical_volume = daily_df["Volume"].iloc[:-1]
-
-            if len(historical_volume) > 5:
-
-                average_volume = float(
-                    historical_volume.iloc[-5:].mean()
-                )
-
-            else:
-
-                average_volume = float(
-                    historical_volume.mean()
-                )
-
-            if average_volume <= 0:
-                continue
-
-            # =============================
-            # Relative Volume
-            # =============================
-
-            rvol = (
-                session_volume
-                / average_volume
-            )
-
-            # =============================
-            # Filters
-            # =============================
-
-            if last_price < min_price:
-                continue
-
-            if last_price > max_price:
-                continue
-
-            if session_volume < min_volume:
-                continue
-
-            if rvol < min_rvol:
-                continue
-
-            if percent_change < min_change:
-                continue
-
-            # =============================
-            # Time
-            # =============================
-
-            timestamp = minute_df.index[-1]
-
-            try:
-                display_time = timestamp.strftime("%H:%M")
-            except:
-                display_time = ""
-
-            # =============================
-            # Add result
-            # =============================
-
-            results.append({
-
-                "time": display_time,
-
-                "symbol": symbol,
-
-                "price": last_price,
-
-                "change": percent_change,
-
-                "rvol": rvol,
-
-                "repeat": repeat_volume,
-
-                "current_volume": current_volume,
-
-                "session_volume": session_volume
-
-            })
-
-        except Exception:
-            continue
-
-    # =====================================================
-    # SORT
-    # =====================================================
-
-    results = sorted(
-        results,
-        key=lambda x: (
-            x["repeat"],
-            x["rvol"],
-            x["change"]
-        ),
-        reverse=True
-    )
-
-    return results
-
-
-# =========================================================
-# SCAN LOGIC
-# =========================================================
-
-should_scan = False
-
-if scan_button:
-    should_scan = True
-
-if auto_scan:
-    should_scan = True
-
-if not st.session_state.results:
-    should_scan = False
-
-
-if should_scan:
-
-    with st.spinner("Scanning market..."):
-
-        st.session_state.results = scan_market()
-        st.session_state.last_scan = time.time()
-
-
-# =========================================================
-# AUTO REFRESH
-# =========================================================
-
-if auto_scan:
-
-    time_since_scan = (
-        time.time()
-        - st.session_state.last_scan
-    )
-
-    if time_since_scan >= refresh_seconds:
-
-        st.session_state.results = scan_market()
-
-        st.session_state.last_scan = time.time()
-
-        st.rerun()
-
-
-# =========================================================
-# MAIN LAYOUT
-# =========================================================
-
-scanner_col, chart_col = st.columns(
-    [35, 65],
-    gap="small"
-)
-
-
-# =========================================================
-# SCANNER
-# =========================================================
-
-with scanner_col:
-
-    st.subheader("Momentum Stocks")
-
-    # Header
-
-    h1, h2, h3, h4, h5 = st.columns(
-        [0.65, 1.45, 0.85, 0.95, 0.75],
-        gap="small"
-    )
-
-    h1.markdown(
-        '<div class="scanner-header">Time</div>',
-        unsafe_allow_html=True
-    )
-
-    h2.markdown(
-        '<div class="scanner-header">Symbol</div>',
-        unsafe_allow_html=True
-    )
-
-    h3.markdown(
-        '<div class="scanner-header">LTP</div>',
-        unsafe_allow_html=True
-    )
-
-    h4.markdown(
-        '<div class="scanner-header">% Change</div>',
-        unsafe_allow_html=True
-    )
-
-    h5.markdown(
-        '<div class="scanner-header">Rel Vol</div>',
-        unsafe_allow_html=True
-    )
-
-    # -----------------------------------------------------
-    # Rows
-    # -----------------------------------------------------
-
-    for row in st.session_state.results:
-
-        c1, c2, c3, c4, c5 = st.columns(
-            [0.65, 1.45, 0.85, 0.95, 0.75],
-            gap="small"
-        )
-
-        # Time
-
-        c1.markdown(
-            f'<span class="small-text">{row["time"]}</span>',
-            unsafe_allow_html=True
-        )
-
-        # Symbol
-
-        with c2:
-
-            if st.button(
-                row["symbol"],
-                key=f"stock_{row['symbol']}"
-            ):
-
-                st.session_state.selected_ticker = row["symbol"]
-
-                st.rerun()
-
-            if row["repeat"]:
-
-                st.markdown(
-                    '<span class="repeat-dot">●</span>',
-                    unsafe_allow_html=True
-                )
-
-        # LTP
-
-        c3.markdown(
-            f'<span class="metric">${row["price"]:.2f}</span>',
-            unsafe_allow_html=True
-        )
-
-        # Change
-
-        change_class = (
-            "green"
-            if row["change"] >= 0
-            else "red"
-        )
-
-        c4.markdown(
-            f'<span class="{change_class}">'
-            f'{row["change"]:.2f}%'
-            f'</span>',
-            unsafe_allow_html=True
-        )
-
-        # RVOL
-
-        c5.markdown(
-            f'<span class="metric">'
-            f'{row["rvol"]:.1f}'
-            f'</span>',
-            unsafe_allow_html=True
-        )
-
-
-# =========================================================
-# TRADINGVIEW
-# =========================================================
-
-with chart_col:
-
-    ticker = st.session_state.selected_ticker
-
-    st.subheader(
-        f"TradingView — {ticker}"
-    )
-
-    tradingview_html = f"""
-    <div class="tradingview-widget-container"
-         style="height:720px;width:100%">
-
-      <div id="tradingview_chart"
-           style="height:100%;width:100%">
-      </div>
-
-      <script type="text/javascript"
-              src="https://s3.tradingview.com/tv.js">
-      </script>
-
-      <script type="text/javascript">
-
-      new TradingView.widget({{
-          "width": "100%",
-          "height": "100%",
-          "symbol": "NASDAQ:{ticker}",
-          "interval": "1",
-          "timezone": "America/New_York",
-          "theme": "dark",
-          "style": "1",
-          "locale": "en",
-          "toolbar_bg": "#11161d",
-          "enable_publishing": false,
-          "hide_top_toolbar": false,
-          "hide_side_toolbar": false,
-          "allow_symbol_change": true,
-          "save_image": false,
-          "container_id": "tradingview_chart"
-      }});
-
-      </script>
-
-    </div>
+        RVOL = 10x
     """
 
-    components.html(
-        tradingview_html,
-        height=730
+    if average_volume <= 0:
+        return 0.0
+
+    return current_volume / average_volume
+
+
+def calculate_volume_spike(symbol):
+    """
+    Prototype volume spike calculation.
+
+    Downloads recent 5-minute data and compares the latest
+    completed bar with the average of recent bars.
+
+    This is NOT a production-grade institutional volume model.
+    It is intended for the prototype.
+    """
+
+    try:
+        data = yf.download(
+            symbol,
+            period="5d",
+            interval="5m",
+            progress=False,
+            auto_adjust=False,
+            threads=False
+        )
+
+        if data.empty:
+            return 0.0, False
+
+        # Handle MultiIndex columns
+        if isinstance(data.columns, pd.MultiIndex):
+            data.columns = data.columns.get_level_values(0)
+
+        if "Volume" not in data.columns:
+            return 0.0, False
+
+        volume = data["Volume"].dropna()
+
+        if len(volume) < 25:
+            return 0.0, False
+
+        latest_volume = float(volume.iloc[-1])
+
+        previous_volume = volume.iloc[-21:-1]
+
+        average_previous = previous_volume.mean()
+
+        if average_previous <= 0:
+            return 0.0, False
+
+        spike_ratio = latest_volume / average_previous
+
+        return float(spike_ratio), spike_ratio >= 3.0
+
+    except Exception:
+        return 0.0, False
+
+
+def get_stock_data(symbol):
+    """
+    Get daily stock information.
+    """
+
+    try:
+        ticker = yf.Ticker(symbol)
+
+        hist = ticker.history(
+            period="3mo",
+            interval="1d",
+            auto_adjust=False
+        )
+
+        if hist.empty:
+            return None
+
+        hist = hist.dropna(subset=["Close", "Volume"])
+
+        if len(hist) < 20:
+            return None
+
+        current = hist.iloc[-1]
+
+        current_price = safe_float(current["Close"])
+        current_volume = safe_float(current["Volume"])
+
+        previous_close = safe_float(
+            hist.iloc[-2]["Close"]
+        )
+
+        if previous_close > 0:
+            change_percent = (
+                (current_price - previous_close)
+                / previous_close
+            ) * 100
+        else:
+            change_percent = 0
+
+        # Average 20-day volume excluding today
+        previous_20_volume = hist["Volume"].iloc[-21:-1]
+
+        average_volume = safe_float(
+            previous_20_volume.mean()
+        )
+
+        rvol = calculate_rvol(
+            current_volume,
+            average_volume
+        )
+
+        # 20-day high
+        high_20 = safe_float(
+            hist["High"].iloc[-21:].max()
+        )
+
+        distance_from_20_high = 0
+
+        if high_20 > 0:
+            distance_from_20_high = (
+                (current_price / high_20) - 1
+            ) * 100
+
+        # 52-week high
+        high_52 = safe_float(
+            hist["High"].max()
+        )
+
+        distance_from_52_high = 0
+
+        if high_52 > 0:
+            distance_from_52_high = (
+                (current_price / high_52) - 1
+            ) * 100
+
+        # Volume spike
+        volume_spike, spike_detected = calculate_volume_spike(
+            symbol
+        )
+
+        # Momentum score
+        score = 0
+
+        if change_percent >= 2:
+            score += 2
+
+        if change_percent >= 5:
+            score += 2
+
+        if rvol >= 2:
+            score += 2
+
+        if rvol >= 5:
+            score += 2
+
+        if rvol >= 10:
+            score += 3
+
+        if volume_spike >= 3:
+            score += 2
+
+        if volume_spike >= 5:
+            score += 3
+
+        return {
+            "symbol": symbol,
+            "name": symbol,
+            "price": round(current_price, 2),
+            "volume": int(current_volume),
+            "average_volume": int(average_volume),
+            "rvol": round(rvol, 2),
+            "change_percent": round(change_percent, 2),
+            "volume_spike": round(volume_spike, 2),
+            "spike_detected": spike_detected,
+            "high_20": round(high_20, 2),
+            "distance_20_high": round(
+                distance_from_20_high,
+                2
+            ),
+            "high_52": round(high_52, 2),
+            "distance_52_high": round(
+                distance_from_52_high,
+                2
+            ),
+            "score": score,
+        }
+
+    except Exception as e:
+        print(f"Error {symbol}: {e}")
+        return None
+
+
+# ============================================================
+# SCANNER
+# ============================================================
+
+def run_scanner():
+    global scanner_cache
+    global last_update
+
+    if scan_lock.locked():
+        return
+
+    with scan_lock:
+
+        print("\n==============================")
+        print("Starting stock scan...")
+        print("==============================")
+
+        results = []
+
+        # Download daily data in one batch.
+        # This is much faster than individually requesting
+        # every stock.
+        try:
+
+            data = yf.download(
+                STOCKS,
+                period="3mo",
+                interval="1d",
+                progress=False,
+                auto_adjust=False,
+                group_by="ticker",
+                threads=True
+            )
+
+        except Exception as e:
+
+            print("Download error:", e)
+            return
+
+        if data.empty:
+            print("No market data received.")
+            return
+
+        for symbol in STOCKS:
+
+            try:
+
+                if isinstance(data.columns, pd.MultiIndex):
+
+                    if symbol not in data.columns.get_level_values(0):
+                        continue
+
+                    hist = data[symbol].copy()
+
+                else:
+
+                    hist = data.copy()
+
+                hist = hist.dropna(
+                    subset=["Close", "Volume"]
+                )
+
+                if len(hist) < 20:
+                    continue
+
+                current = hist.iloc[-1]
+
+                price = safe_float(current["Close"])
+                volume = safe_float(current["Volume"])
+
+                previous_close = safe_float(
+                    hist.iloc[-2]["Close"]
+                )
+
+                if previous_close <= 0:
+                    continue
+
+                change = (
+                    (price - previous_close)
+                    / previous_close
+                ) * 100
+
+                avg_volume = safe_float(
+                    hist["Volume"]
+                    .iloc[-21:-1]
+                    .mean()
+                )
+
+                rvol = calculate_rvol(
+                    volume,
+                    avg_volume
+                )
+
+                high_20 = safe_float(
+                    hist["High"].iloc[-21:].max()
+                )
+
+                high_52 = safe_float(
+                    hist["High"].max()
+                )
+
+                distance_20 = (
+                    ((price / high_20) - 1) * 100
+                    if high_20 > 0 else 0
+                )
+
+                distance_52 = (
+                    ((price / high_52) - 1) * 100
+                    if high_52 > 0 else 0
+                )
+
+                # Initial score
+                score = 0
+
+                if change >= 2:
+                    score += 2
+
+                if change >= 5:
+                    score += 2
+
+                if rvol >= 2:
+                    score += 2
+
+                if rvol >= 5:
+                    score += 2
+
+                if rvol >= 10:
+                    score += 3
+
+                result = {
+                    "symbol": symbol,
+                    "name": symbol,
+                    "price": round(price, 2),
+                    "volume": int(volume),
+                    "average_volume": int(avg_volume),
+                    "rvol": round(rvol, 2),
+                    "change_percent": round(change, 2),
+                    "volume_spike": 0,
+                    "spike_detected": False,
+                    "high_20": round(high_20, 2),
+                    "distance_20_high": round(
+                        distance_20,
+                        2
+                    ),
+                    "high_52": round(high_52, 2),
+                    "distance_52_high": round(
+                        distance_52,
+                        2
+                    ),
+                    "score": score,
+                }
+
+                results.append(result)
+
+            except Exception as e:
+
+                print(
+                    f"Processing error {symbol}: {e}"
+                )
+
+        # Sort by score first
+        results.sort(
+            key=lambda x: (
+                x["score"],
+                x["rvol"],
+                x["change_percent"]
+            ),
+            reverse=True
+        )
+
+        scanner_cache = results
+        last_update = datetime.now().strftime(
+            "%Y-%m-%d %H:%M:%S"
+        )
+
+        print(
+            f"Scan complete: {len(results)} stocks"
+        )
+
+
+# ============================================================
+# BACKGROUND REFRESH
+# ============================================================
+
+def background_scanner():
+
+    while True:
+
+        try:
+            run_scanner()
+
+        except Exception as e:
+            print(
+                "Background scanner error:",
+                e
+            )
+
+        time.sleep(REFRESH_SECONDS)
+
+
+# ============================================================
+# WEB ROUTES
+# ============================================================
+
+@app.route("/")
+def index():
+
+    return render_template(
+        "index.html"
+    )
+
+
+@app.route("/api/stocks")
+def stocks():
+
+    # Read filters from URL
+    try:
+        min_price = float(
+            request.args.get(
+                "min_price",
+                0
+            )
+        )
+    except:
+        min_price = 0
+
+    try:
+        max_price = float(
+            request.args.get(
+                "max_price",
+                999999
+            )
+        )
+    except:
+        max_price = 999999
+
+    try:
+        min_volume = int(
+            request.args.get(
+                "min_volume",
+                100000
+            )
+        )
+    except:
+        min_volume = 100000
+
+    try:
+        min_change = float(
+            request.args.get(
+                "min_change",
+                0
+            )
+        )
+    except:
+        min_change = 0
+
+    try:
+        min_rvol = float(
+            request.args.get(
+                "min_rvol",
+                0
+            )
+        )
+    except:
+        min_rvol = 0
+
+    search = request.args.get(
+        "search",
+        ""
+    ).strip().upper()
+
+    sort_by = request.args.get(
+        "sort",
+        "score"
+    )
+
+    filtered = []
+
+    for stock in scanner_cache:
+
+        if stock["price"] < min_price:
+            continue
+
+        if stock["price"] > max_price:
+            continue
+
+        if stock["volume"] < min_volume:
+            continue
+
+        if stock["change_percent"] < min_change:
+            continue
+
+        if stock["rvol"] < min_rvol:
+            continue
+
+        if search:
+
+            if search not in stock["symbol"].upper():
+
+                continue
+
+        filtered.append(stock)
+
+    # Sorting
+    if sort_by == "price":
+
+        filtered.sort(
+            key=lambda x: x["price"],
+            reverse=True
+        )
+
+    elif sort_by == "volume":
+
+        filtered.sort(
+            key=lambda x: x["volume"],
+            reverse=True
+        )
+
+    elif sort_by == "change":
+
+        filtered.sort(
+            key=lambda x: x["change_percent"],
+            reverse=True
+        )
+
+    elif sort_by == "rvol":
+
+        filtered.sort(
+            key=lambda x: x["rvol"],
+            reverse=True
+        )
+
+    else:
+
+        filtered.sort(
+            key=lambda x: x["score"],
+            reverse=True
+        )
+
+    return jsonify({
+        "updated": last_update,
+        "count": len(filtered),
+        "stocks": filtered
+    })
+
+
+@app.route("/api/status")
+def status():
+
+    return jsonify({
+        "updated": last_update,
+        "total": len(scanner_cache)
+    })
+
+
+# ============================================================
+# START
+# ============================================================
+
+if __name__ == "__main__":
+
+    # Initial scan
+    print("Running initial scanner...")
+
+    run_scanner()
+
+    # Background scanner
+    thread = threading.Thread(
+        target=background_scanner,
+        daemon=True
+    )
+
+    thread.start()
+
+    print("")
+    print("==============================")
+    print("US STOCK SCANNER")
+    print("==============================")
+    print("Open:")
+    print("http://127.0.0.1:5000")
+    print("==============================")
+
+    app.run(
+        host="127.0.0.1",
+        port=5000,
+        debug=False,
+        use_reloader=False
     )
